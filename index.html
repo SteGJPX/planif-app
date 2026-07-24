@@ -241,6 +241,7 @@ section.view.active{display:block}
     <div id="heroBox"></div>
     <div class="strip" id="dayStrip"></div>
     <div id="agendaBox"></div>
+    <div id="mailSugBox"></div>
     <div class="section-title" id="nextTitle">Ensuite</div>
     <div class="task-list" id="todayList"></div>
     <div class="done-strip" id="doneStrip"></div>
@@ -273,6 +274,7 @@ section.view.active{display:block}
   <!-- ===== VUE SEMAINE (cockpit) ===== -->
   <section class="view" id="view-cockpit">
     <div class="day-summary" id="ckStats"></div>
+    <button class="btn ghost" style="width:100%;margin-bottom:1rem" onclick="shareWeek()">📤 Partager un résumé de ma charge</button>
     <div class="section-title">Les 7 prochains jours</div>
     <div id="ckWeek"></div>
     <div class="section-title" id="ckDlTitle">Échéances à venir</div>
@@ -319,6 +321,7 @@ section.view.active{display:block}
         </select>
       </div>
     </div>
+    <button class="btn ghost" id="btnSlot" style="display:none;width:100%" onclick="blockSlot(editingId)">📅 Bloquer un créneau libre dans mon agenda</button>
     <div class="modal-actions">
       <button class="btn danger" id="btnDelete" style="display:none">Supprimer</button>
       <button class="btn primary" id="btnSave">Enregistrer</button>
@@ -787,6 +790,7 @@ function openModal(task){
   editingId=task?task.id:null;
   document.getElementById('modalTitle').textContent=task?'Modifier la tâche':'Nouvelle tâche';
   document.getElementById('btnDelete').style.display=task?'block':'none';
+  document.getElementById('btnSlot').style.display=task&&gcal.token?'block':'none';
   document.getElementById('fTitle').value=task?task.title:document.getElementById('quickInput').value.trim();
   document.getElementById('fNotes').value=task?task.notes:'';
   document.getElementById('fDeadline').value=task&&task.deadline?task.deadline:'';
@@ -994,10 +998,10 @@ function gcalConnect(interactive){
   if(!window.google||!google.accounts){if(interactive)toast('⚠️ Service Google pas encore chargé — réessaie dans 2 s');return}
   const tc=google.accounts.oauth2.initTokenClient({
     client_id:gcal.clientId,
-    scope:'https://www.googleapis.com/auth/calendar.readonly',
+    scope:'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/gmail.readonly',
     callback:r=>{if(r&&r.access_token){gcal.token=r.access_token;gcal.exp=Date.now()+((r.expires_in||3600)-60)*1000;saveGcal();
-      document.getElementById('gcalStatus')&&(document.getElementById('gcalStatus').textContent='✅ Google Agenda connecté');
-      loadGcalEvents();toast('📅 Google Agenda connecté')}},
+      document.getElementById('gcalStatus')&&(document.getElementById('gcalStatus').textContent='✅ Google connecté (agenda + mails)');
+      loadGcalEvents();loadMail();toast('✅ Compte Google connecté')}},
     error_callback:()=>{if(interactive)toast('⚠️ Connexion Google annulée ou refusée')}
   });
   tc.requestAccessToken(interactive?{}:{prompt:''});
@@ -1061,6 +1065,118 @@ function renderAgenda(){
       const past=f&&f.getTime()<now;
       return `<div class="rowt" style="${past?'opacity:.4':''}"><span class="pdot" style="background:${e._color||'var(--accent2)'}" title="${esc(e._cal||'')}"></span><span class="re" style="min-width:5.2rem">${allDay?'Journée':hh(s)+'–'+hh(f)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(sans titre)')}</span></div>`;
     }).join('')+'</div>';
+}
+
+/* ================= SUGGESTIONS MAIL (lecture seule) ================= */
+let mailSug=null,mailSugOpen=false;
+async function loadMail(){
+  if(!gcal.token||Date.now()>gcal.exp)return;
+  const H={headers:{Authorization:'Bearer '+gcal.token}};
+  try{
+    const q=encodeURIComponent('in:inbox -category:promotions -category:social -category:updates newer_than:3d');
+    const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q='+q,H);
+    if(!r.ok){mailSug=[];renderMailSug();return}
+    const ids=((await r.json()).messages||[]);
+    state.mailSeen=state.mailSeen||[];
+    const seen=new Map(state.mailSeen.map(m=>[m.id,m]));
+    const fresh=ids.filter(m=>{const s=seen.get(m.id);return !s||(s.action==='later'&&Date.now()>s.until)}).slice(0,10);
+    const metas=await Promise.all(fresh.map(async m=>{
+      try{
+        const rr=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/'+m.id+'?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=List-Unsubscribe',H);
+        if(!rr.ok)return null;
+        const j=await rr.json();
+        const h=n=>{const x=((j.payload||{}).headers||[]).find(hh=>hh.name.toLowerCase()===n);return x?x.value:''};
+        if(h('list-unsubscribe'))return null;
+        const from=h('from');
+        if(/no-?reply|notification|mailer|newsletter|automated/i.test(from))return null;
+        const subject=h('subject')||'(sans objet)';
+        const snippet=j.snippet||'';
+        const nn=normTxt(' '+subject+' '+snippet+' ');
+        const actionable=/peux[- ]tu|pourrais[- ]tu|pouvez[- ]vous|merci de|merci d.|il faut|faudrait|envoie|envoyer|besoin de|avant le|urgent|deadline|rappel|relance|valider|confirmer|\?/.test(nn);
+        if(!actionable)return null;
+        let deadline=null;const dm=nn.match(/\b([0-3]?\d)\/([01]?\d)(?:\/(\d{2,4}))?\b/);
+        if(dm){const y=dm[3]?(+dm[3]<100?2000+ +dm[3]:+dm[3]):new Date().getFullYear();const d=new Date(y,+dm[2]-1,+dm[1]);if(d.getTime()>Date.now()-864e5)deadline=localDS(d)}
+        return {id:m.id,from:from.replace(/<.*>/,'').replace(/"/g,'').trim(),subject,snippet,deadline};
+      }catch(e){return null}
+    }));
+    mailSug=metas.filter(Boolean);
+    renderMailSug();
+  }catch(e){}
+}
+function markMail(id,action){
+  state.mailSeen=state.mailSeen||[];
+  state.mailSeen.push({id,action,until:action==='later'?Date.now()+864e5:0});
+  if(state.mailSeen.length>300)state.mailSeen=state.mailSeen.slice(-300);
+  save();
+  mailSug=(mailSug||[]).filter(s=>s.id!==id);
+  renderMailSug();
+}
+function acceptMail(id){
+  const s=(mailSug||[]).find(x=>x.id===id);if(!s)return;
+  const title=s.subject.replace(/^((re|tr|fwd?)\s*:\s*)+/i,'').trim().slice(0,90);
+  state.tasks.push({id:uid(),title:title[0].toUpperCase()+title.slice(1),
+    notes:'✉️ De '+s.from+'\n'+s.snippet,projectId:state.projects[0].id,
+    est:30,impact:2,urgency:s.deadline?3:2,complexity:1,deadline:s.deadline,
+    today:!!s.deadline,done:false,doneAt:null,spent:0,timerStart:null,subtasks:[],createdAt:Date.now(),subsOpen:false});
+  markMail(id,'done');render();
+  toast('✓ Tâche créée depuis le mail'+(s.deadline?' · ⏰ '+s.deadline:'')+' — ajuste projet & durée avec ✎');
+}
+function renderMailSug(){
+  const el=document.getElementById('mailSugBox');if(!el)return;
+  if(!mailSug||!mailSug.length){el.innerHTML='';return}
+  el.innerHTML=`<div class="section-title" style="cursor:pointer" onclick="mailSugOpen=!mailSugOpen;renderMailSug()">📥 Suggestions depuis tes mails&nbsp;<span style="background:rgba(124,108,255,.3);border-radius:999px;padding:0 .5rem;font-size:.72rem">${mailSug.length}</span>&nbsp;${mailSugOpen?'▾':'▸'}</div>`
+  +(mailSugOpen?mailSug.map(s=>`<div class="task" style="margin-bottom:.6rem"><div class="t-row"><div class="t-main">
+     <div class="t-title" style="font-size:.92rem">${esc(s.subject)}</div>
+     <div class="t-meta"><span class="chip">👤 ${esc(s.from)}</span>${s.deadline?`<span class="badge soon">⏰ ${s.deadline.slice(8,10)}/${s.deadline.slice(5,7)}</span>`:''}</div>
+     <div style="font-size:.79rem;color:var(--muted);margin-top:.35rem">${esc(s.snippet.slice(0,130))}…</div>
+     <div style="display:flex;gap:.45rem;margin-top:.6rem">
+       <button class="btn primary" style="flex:1;padding:.5rem;font-size:.83rem" onclick="acceptMail('${s.id}')">✓ Créer la tâche</button>
+       <button class="btn ghost" style="padding:.5rem .8rem" title="Me le reproposer demain" onclick="markMail('${s.id}','later');toast('⏰ Je te le reproposerai demain')">⏰</button>
+       <button class="btn ghost" style="padding:.5rem .8rem" title="Ignorer" onclick="markMail('${s.id}','no')">✕</button>
+     </div></div></div></div>`).join(''):'');
+}
+
+/* ================= BLOCAGE DE CRÉNEAU AGENDA ================= */
+async function blockSlot(id){
+  const t=state.tasks.find(x=>x.id===id);if(!t)return;
+  if(!gcal.token||Date.now()>gcal.exp){toast('⚠️ Connecte d\'abord ton compte Google (⚙️)');return}
+  const dur=t.est*60000;let slot=null;
+  for(let i=0;i<7&&!slot;i++){
+    const day=new Date();day.setDate(day.getDate()+i);
+    const evs=eventsForDay(localDS(day)).filter(e=>e.start.dateTime)
+      .map(e=>[new Date(e.start.dateTime).getTime(),new Date(e.end.dateTime).getTime()]).sort((a,b)=>a[0]-b[0]);
+    const s9=new Date(day);s9.setHours(9,0,0,0);
+    const s18=new Date(day);s18.setHours(18,0,0,0);
+    let cursor=Math.max(s9.getTime(),Date.now()+15*60000);
+    for(const [es,ef] of evs){
+      if(es-cursor>=dur){slot=cursor;break}
+      cursor=Math.max(cursor,ef);
+    }
+    if(!slot&&s18.getTime()-cursor>=dur)slot=cursor;
+  }
+  if(!slot){toast('😅 Aucun créneau libre de '+fmtMin(t.est)+' trouvé sur 7 jours (9h-18h)');return}
+  try{
+    const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events',{
+      method:'POST',headers:{Authorization:'Bearer '+gcal.token,'Content-Type':'application/json'},
+      body:JSON.stringify({summary:'🎯 '+t.title,description:'Créneau bloqué par Planif',
+        start:{dateTime:new Date(slot).toISOString()},end:{dateTime:new Date(slot+dur).toISOString()}})});
+    if(!r.ok)throw new Error(r.status);
+    closeModal();
+    toast('📅 Créneau bloqué : '+new Date(slot).toLocaleString('fr-FR',{weekday:'long',day:'numeric',hour:'2-digit',minute:'2-digit'})+' · '+fmtMin(t.est));
+    loadGcalEvents();
+  }catch(e){toast('⚠️ Échec ('+e.message+') — reconnecte ton compte Google dans ⚙️ pour accorder la nouvelle permission')}
+}
+
+/* ================= PARTAGE DE CHARGE ================= */
+function shareWeek(){
+  const open=state.tasks.filter(t=>!t.done);
+  const withDl=open.filter(t=>t.deadline).sort((a,b)=>a.deadline<b.deadline?-1:1);
+  let txt='📋 Ma charge de travail — '+new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})+'\n\n';
+  txt+='• '+open.length+' tâches en cours, ~'+fmtMin(open.reduce((s,t)=>s+t.est,0))+' de travail estimé\n';
+  if(gcalEvents&&gcalEvents.length)txt+='• '+gcalEvents.length+' rendez-vous sur les 7 prochains jours\n';
+  if(withDl.length){txt+='\nProchaines échéances :\n'+withDl.slice(0,8).map(t=>'• '+t.deadline.slice(8,10)+'/'+t.deadline.slice(5,7)+' — '+t.title+' ('+fmtMin(t.est)+')').join('\n')}
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{})}
+  else{navigator.clipboard.writeText(txt).then(()=>toast('📤 Résumé copié — colle-le dans un message'),()=>toast('⚠️ Copie impossible'))}
 }
 
 /* ================= VUE SEMAINE (cockpit) ================= */
@@ -1204,7 +1320,7 @@ function voiceAdd(raw){
 /* ================= INIT ================= */
 load();render();
 if(syncReady())pullCloud(false);
-if(gcal.clientId){setTimeout(loadGcalEvents,1500);setInterval(loadGcalEvents,300000)}
+if(gcal.clientId){setTimeout(()=>{loadGcalEvents();loadMail()},1500);setInterval(()=>{loadGcalEvents();loadMail()},300000)}
 tickInt=setInterval(tick,1000);
 setInterval(()=>{const t=state.tasks.find(x=>x.timerStart);if(t){save()}},15000);
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
