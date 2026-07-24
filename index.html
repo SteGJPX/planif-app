@@ -980,7 +980,7 @@ function schedulePush(){if(!syncReady())return;clearTimeout(pushTimer);pushTimer
 
 /* ================= GOOGLE AGENDA ================= */
 const GCAL_KEY='planif.gcal';
-const GCAL_DEFAULT_CLIENT_ID='';/* Client ID intégré : une fois renseigné ici, la connexion devient un simple bouton */
+const GCAL_DEFAULT_CLIENT_ID='195814257998-6pjh27lhmh949hk412j21thpl98t04ho.apps.googleusercontent.com';/* Client ID intégré : connexion en un bouton */
 let gcal=JSON.parse(localStorage.getItem(GCAL_KEY)||'null')||{clientId:'',token:'',exp:0};
 if(!gcal.clientId&&GCAL_DEFAULT_CLIENT_ID)gcal.clientId=GCAL_DEFAULT_CLIENT_ID;
 let gcalEvents=null;
