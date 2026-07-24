@@ -1006,13 +1006,27 @@ async function loadGcalEvents(){
   if(!gcal.token||Date.now()>gcal.exp){if(gcal.clientId)gcalConnect(false);return}
   const start=new Date();start.setHours(0,0,0,0);
   const end=new Date(start);end.setDate(end.getDate()+7);
+  const H={headers:{Authorization:'Bearer '+gcal.token}};
   try{
-    const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=25&timeMin='+encodeURIComponent(start.toISOString())+'&timeMax='+encodeURIComponent(end.toISOString()),
-      {headers:{Authorization:'Bearer '+gcal.token}});
-    if(r.status===401){gcal.token='';saveGcal();return}
-    if(!r.ok)return;
-    const j=await r.json();
-    gcalEvents=(j.items||[]).filter(e=>e.status!=='cancelled');
+    /* 1. tous les calendriers visibles du compte */
+    const rl=await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader',H);
+    if(rl.status===401){gcal.token='';saveGcal();return}
+    if(!rl.ok)return;
+    const cals=((await rl.json()).items||[]).filter(c=>c.selected!==false&&!c.hidden);
+    /* 2. événements de chaque calendrier en parallèle, avec la couleur du calendrier */
+    const q='singleEvents=true&orderBy=startTime&maxResults=50&timeMin='+encodeURIComponent(start.toISOString())+'&timeMax='+encodeURIComponent(end.toISOString());
+    const packs=await Promise.all(cals.map(async c=>{
+      try{
+        const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(c.id)+'/events?'+q,H);
+        if(!r.ok)return[];
+        return ((await r.json()).items||[]).filter(e=>e.status!=='cancelled')
+          .map(e=>Object.assign(e,{_color:c.backgroundColor||'#22d3ee',_cal:c.summaryOverride||c.summary||''}));
+      }catch(err){return[]}
+    }));
+    const seen=new Set();
+    gcalEvents=packs.flat()
+      .filter(e=>{const k=e.id||(e.summary+(e.start&&(e.start.dateTime||e.start.date)));if(seen.has(k))return false;seen.add(k);return true})
+      .sort((a,b)=>{const ka=a.start.dateTime||a.start.date,kb=b.start.dateTime||b.start.date;return ka<kb?-1:1});
     renderAgenda();render();
   }catch(e){}
 }
@@ -1045,7 +1059,7 @@ function renderAgenda(){
       const allDay=!e.start.dateTime;
       const s=allDay?null:new Date(e.start.dateTime),f=allDay?null:new Date(e.end.dateTime);
       const past=f&&f.getTime()<now;
-      return `<div class="rowt" style="${past?'opacity:.4':''}"><span class="re" style="min-width:5.2rem">${allDay?'Journée':hh(s)+'–'+hh(f)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(sans titre)')}</span></div>`;
+      return `<div class="rowt" style="${past?'opacity:.4':''}"><span class="pdot" style="background:${e._color||'var(--accent2)'}" title="${esc(e._cal||'')}"></span><span class="re" style="min-width:5.2rem">${allDay?'Journée':hh(s)+'–'+hh(f)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(sans titre)')}</span></div>`;
     }).join('')+'</div>';
 }
 
@@ -1071,7 +1085,7 @@ function renderCockpit(){
       +evs.reduce((s,e)=>e.start.dateTime?s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000:s,0);
     const hh=x=>new Date(x).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const items=[
-      ...evs.map(e=>`<div class="ck-item ev"><span class="hr">${e.start.dateTime?hh(e.start.dateTime):'📅'}</span><span class="lbl">${esc(e.summary||'(RDV)')}</span></div>`),
+      ...evs.map(e=>`<div class="ck-item ev"><span class="pdot" style="background:${e._color||'var(--accent2)'}"></span><span class="hr">${e.start.dateTime?hh(e.start.dateTime):'📅'}</span><span class="lbl">${esc(e.summary||'(RDV)')}</span></div>`),
       ...due.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">⏰ ${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`),
       ...planned.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`)
     ];
