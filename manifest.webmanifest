@@ -1,0 +1,14 @@
+{
+  "name": "Planif — Mon assistant de journée",
+  "short_name": "Planif",
+  "description": "Planificateur de tâches multi-projets : priorisation intelligente, timer, suivi du temps.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0b0e1a",
+  "theme_color": "#0b0e1a",
+  "lang": "fr",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
