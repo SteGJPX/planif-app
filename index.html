@@ -938,7 +938,8 @@ function b64d(s){return decodeURIComponent(escape(atob(s)))}
 function setSyncStatus(m){const el=document.getElementById('syncStatus');if(el)el.textContent=m}
 function saveSyncCfg(){
   const r=document.getElementById('syncRepo'),t=document.getElementById('syncToken');
-  if(r)sync.repo=r.value.trim();if(t&&t.value.trim())sync.token=t.value.trim();
+  if(r&&r.value.trim())sync.repo=r.value.trim();
+  if(t&&t.value.trim())sync.token=t.value.trim();
   localStorage.setItem(SYNC_KEY,JSON.stringify(sync));
 }
 function errLabel(s){return s==401||s==403?'token invalide ou expiré':s==404?'dépôt introuvable (vérifie propriétaire/nom + droits du token)':'erreur '+s}
@@ -956,9 +957,15 @@ async function pullCloud(manual){
       state=remote;localStorage.setItem(LS_KEY,JSON.stringify(state));render();
       setSyncStatus('✅ Récupéré (version du '+new Date(remote.updatedAt).toLocaleString('fr-FR')+')');
       if(manual)toast('⬇️ Données synchronisées depuis le cloud');
+    }else if((state.updatedAt||0)>(remote.updatedAt||0)&&manual){
+      /* la version locale semble plus récente : ne jamais écraser le cloud sans confirmation */
+      const remoteN=(remote.tasks||[]).length,localN=state.tasks.length;
+      if(confirm('Le cloud contient '+remoteN+' tâche(s) ('+new Date(remote.updatedAt).toLocaleString('fr-FR')+'), cet appareil en a '+localN+'.\n\nOK = RÉCUPÉRER la version du cloud (recommandé après une réinstallation)\nAnnuler = garder la version de cet appareil et l\'envoyer au cloud')){
+        state=remote;localStorage.setItem(LS_KEY,JSON.stringify(state));render();
+        toast('⬇️ Version cloud restaurée ('+remoteN+' tâches)');setSyncStatus('✅ Version cloud restaurée');
+      }else{pushCloud(true)}
     }else{
       setSyncStatus('✅ Cet appareil est déjà à jour');
-      if((state.updatedAt||0)>(remote.updatedAt||0))pushCloud(false);
     }
   }catch(e){setSyncStatus('⚠️ Échec : '+e.message)}
 }
