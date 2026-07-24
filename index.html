@@ -229,6 +229,7 @@ section.view.active{display:block}
   <section class="view active" id="view-today">
     <div id="heroBox"></div>
     <div class="strip" id="dayStrip"></div>
+    <div id="agendaBox"></div>
     <div class="section-title" id="nextTitle">Ensuite</div>
     <div class="task-list" id="todayList"></div>
     <div class="done-strip" id="doneStrip"></div>
@@ -240,7 +241,8 @@ section.view.active{display:block}
     <div class="quick-add">
       <input id="quickInput" placeholder="Ajout rapide…">
       <button class="btn ghost mic-btn" onclick="startVoice()" title="Dicter une tâche">🎤</button>
-      <button class="btn primary" id="btnFullAdd">＋ Détail</button>
+      <button class="btn ghost" onclick="document.getElementById('mailOverlay').classList.add('open')" title="Coller un mail → tâche">✉️</button>
+      <button class="btn primary" id="btnFullAdd">＋</button>
     </div>
     <div class="filters" id="projFilters"></div>
     <div class="task-list" id="backlogList"></div>
@@ -316,6 +318,10 @@ section.view.active{display:block}
     </div>
     <p class="hint" id="syncStatus"></p>
     <p class="hint" style="margin-bottom:1rem">Une fois configurée sur chaque appareil, la synchro devient automatique : envoi ~8 s après chaque modification, récupération à l'ouverture de l'app. Les données vont uniquement dans ton dépôt privé.</p>
+    <div class="section-title">📅 Google Agenda</div>
+    <div class="f-group"><label>Client ID Google OAuth</label><input id="gcalClientId" placeholder="…apps.googleusercontent.com"></div>
+    <button class="btn ghost" style="width:100%" onclick="gcalConnect(true)">📅 Connecter Google Agenda</button>
+    <p class="hint" id="gcalStatus" style="margin:.5rem 0 1rem">Affiche tes rendez-vous du jour dans le dashboard et calcule ton temps réellement disponible. Lecture seule, connexion directe navigateur → Google (aucun serveur tiers).</p>
     <div class="section-title">💾 Sauvegarde manuelle</div>
     <p class="hint" style="margin-bottom:1rem">Tes données restent sur cet appareil (aucun serveur). L'export JSON sert de sauvegarde ou de transfert manuel.</p>
     <div style="display:flex;flex-direction:column;gap:.6rem">
@@ -351,7 +357,18 @@ section.view.active{display:block}
   </div>
 </div>
 
+<!-- ===== MODAL MAIL → TÂCHE ===== -->
+<div class="overlay" id="mailOverlay">
+  <div class="modal">
+    <h2>✉️ Coller un mail → tâche<button class="close-x" onclick="document.getElementById('mailOverlay').classList.remove('open')">✕</button></h2>
+    <p class="hint" style="margin-bottom:.8rem">Colle l'objet et le contenu du mail : je crée une tâche configurée (échéance et urgence détectées), avec le mail conservé en notes.</p>
+    <div class="f-group"><textarea id="mailText" rows="8" placeholder="Objet : demande client&#10;&#10;Bonjour, peux-tu m'envoyer le fichier avant le 28/07 ?…"></textarea></div>
+    <div class="modal-actions"><button class="btn primary" onclick="mailToTask()">Analyser & créer la tâche</button></div>
+  </div>
+</div>
+
 <div id="toast"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
 /* ================= ÉTAT ================= */
@@ -592,10 +609,12 @@ function render(){
   const spentToday=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0)+(running?Date.now()-running.timerStart:0);
   const planCount=today.length+doneToday.length;
   const pct=planCount?Math.round(doneToday.length/planCount*100):0;
+  const busy=busyRemaining();
   document.getElementById('dayStrip').innerHTML=
     `<span><b>${today.length}</b> à faire</span><span>·</span>
      <span><b>${fmtMin(estTotal)||'0 min'}</b> estimé</span><span>·</span>
      <span>⏱ <b>${fmtMs(spentToday)}</b> focus</span>
+     ${busy>0?`<span>·</span><span>📅 <b>${fmtMs(busy)}</b> de RDV</span>`:''}
      <span style="margin-left:auto"><b>${pct}%</b></span>
      <div class="pbar"><i style="width:${pct}%"></i></div>`;
 
@@ -864,6 +883,8 @@ document.getElementById('btnMenu').addEventListener('click',()=>{
   document.getElementById('syncRepo').value=sync.repo||'';
   document.getElementById('syncToken').value=sync.token||'';
   setSyncStatus(syncReady()?'Synchro configurée sur cet appareil ✓':'Synchro non configurée');
+  document.getElementById('gcalClientId').value=gcal.clientId||'';
+  if(gcal.token&&Date.now()<gcal.exp)document.getElementById('gcalStatus').textContent='✅ Google Agenda connecté';
   document.getElementById('menuOverlay').classList.add('open');
 });
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
@@ -933,6 +954,98 @@ async function pushCloud(manual){
 }
 function schedulePush(){if(!syncReady())return;clearTimeout(pushTimer);pushTimer=setTimeout(()=>pushCloud(false),8000)}
 
+/* ================= GOOGLE AGENDA ================= */
+const GCAL_KEY='planif.gcal';
+let gcal=JSON.parse(localStorage.getItem(GCAL_KEY)||'null')||{clientId:'',token:'',exp:0};
+let gcalEvents=null;
+function saveGcal(){localStorage.setItem(GCAL_KEY,JSON.stringify(gcal))}
+function gcalConnect(interactive){
+  const inp=document.getElementById('gcalClientId');
+  if(inp&&inp.value.trim())gcal.clientId=inp.value.trim();
+  saveGcal();
+  if(!gcal.clientId){if(interactive)toast('⚠️ Renseigne d\'abord le Client ID Google');return}
+  if(location.protocol==='file:'){toast('⚠️ La connexion Google ne fonctionne que sur la version hébergée en ligne');return}
+  if(!window.google||!google.accounts){if(interactive)toast('⚠️ Service Google pas encore chargé — réessaie dans 2 s');return}
+  const tc=google.accounts.oauth2.initTokenClient({
+    client_id:gcal.clientId,
+    scope:'https://www.googleapis.com/auth/calendar.readonly',
+    callback:r=>{if(r&&r.access_token){gcal.token=r.access_token;gcal.exp=Date.now()+((r.expires_in||3600)-60)*1000;saveGcal();
+      document.getElementById('gcalStatus')&&(document.getElementById('gcalStatus').textContent='✅ Google Agenda connecté');
+      loadGcalEvents();toast('📅 Google Agenda connecté')}},
+    error_callback:()=>{if(interactive)toast('⚠️ Connexion Google annulée ou refusée')}
+  });
+  tc.requestAccessToken(interactive?{}:{prompt:''});
+}
+async function loadGcalEvents(){
+  if(!gcal.token||Date.now()>gcal.exp){if(gcal.clientId)gcalConnect(false);return}
+  const start=new Date();start.setHours(0,0,0,0);
+  const end=new Date(start);end.setDate(end.getDate()+1);
+  try{
+    const r=await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events?singleEvents=true&orderBy=startTime&maxResults=25&timeMin='+encodeURIComponent(start.toISOString())+'&timeMax='+encodeURIComponent(end.toISOString()),
+      {headers:{Authorization:'Bearer '+gcal.token}});
+    if(r.status===401){gcal.token='';saveGcal();return}
+    if(!r.ok)return;
+    const j=await r.json();
+    gcalEvents=(j.items||[]).filter(e=>e.status!=='cancelled');
+    renderAgenda();render();
+  }catch(e){}
+}
+function busyRemaining(){
+  if(!gcalEvents)return 0;
+  const now=Date.now();let b=0;
+  gcalEvents.forEach(e=>{
+    if(!e.start||!e.start.dateTime)return;
+    const s=new Date(e.start.dateTime).getTime(),f=new Date(e.end.dateTime).getTime();
+    if(f>now)b+=f-Math.max(s,now);
+  });
+  return b;
+}
+function renderAgenda(){
+  const el=document.getElementById('agendaBox');if(!el)return;
+  if(!gcalEvents||!gcalEvents.length){el.innerHTML='';return}
+  const now=Date.now();
+  const hh=d=>d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  el.innerHTML='<div class="section-title">📅 Rendez-vous du jour</div><div class="task-list">'
+    +gcalEvents.map(e=>{
+      const allDay=!e.start.dateTime;
+      const s=allDay?null:new Date(e.start.dateTime),f=allDay?null:new Date(e.end.dateTime);
+      const past=f&&f.getTime()<now;
+      return `<div class="rowt" style="${past?'opacity:.4':''}"><span class="re" style="min-width:5.2rem">${allDay?'Journée':hh(s)+'–'+hh(f)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(sans titre)')}</span></div>`;
+    }).join('')+'</div>';
+}
+
+/* ================= MAIL → TÂCHE ================= */
+function mailToTask(){
+  const raw=document.getElementById('mailText').value.trim();
+  if(!raw){toast('⚠️ Colle d\'abord le contenu du mail');return}
+  const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean);
+  let title=(lines.find(l=>/^(objet|subject|re\s*:|tr\s*:)/i.test(l))||'').replace(/^(objet|subject)\s*:\s*/i,'').replace(/^(re|tr)\s*:\s*/i,'').trim()||lines[0]||'';
+  if(title.length>90)title=title.slice(0,90)+'…';
+  const n=normTxt(' '+raw+' ');
+  let deadline=null;
+  const dm=n.match(/\b([0-3]?\d)\/([01]?\d)(?:\/(\d{2,4}))?\b/);
+  if(dm){
+    const y=dm[3]?(+dm[3]<100?2000+ +dm[3]:+dm[3]):new Date().getFullYear();
+    const d=new Date(y,+dm[2]-1,+dm[1]);
+    if(d.getTime()>Date.now()-864e5)deadline=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+  }
+  if(!deadline){
+    if(/apres[- ]demain/.test(n)){const x=new Date();x.setDate(x.getDate()+2);deadline=x.toISOString().slice(0,10)}
+    else if(/\bdemain\b/.test(n)){const x=new Date();x.setDate(x.getDate()+1);deadline=x.toISOString().slice(0,10)}
+  }
+  const urgent=/urgent|des que possible|asap|au plus vite|tres rapidement/.test(n);
+  const t={id:uid(),title:title[0].toUpperCase()+title.slice(1),
+    notes:'✉️ Mail :\n'+raw.slice(0,800),projectId:state.projects[0].id,
+    est:30,impact:2,urgency:urgent?3:2,complexity:1,deadline,
+    today:urgent,done:false,doneAt:null,spent:0,timerStart:null,subtasks:[],createdAt:Date.now(),subsOpen:false};
+  state.tasks.push(t);save();
+  document.getElementById('mailOverlay').classList.remove('open');
+  document.getElementById('mailText').value='';
+  render();
+  toast('✉️ Tâche créée'+(deadline?' · ⏰ '+deadline:'')+(urgent?' · 🔥 urgent':'')+' — vérifie projet & durée');
+  openEdit(t.id);
+}
+
 /* ================= VOIX ================= */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 function normTxt(s){return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
@@ -997,6 +1110,7 @@ function voiceAdd(raw){
 /* ================= INIT ================= */
 load();render();
 if(syncReady())pullCloud(false);
+if(gcal.clientId){setTimeout(loadGcalEvents,1500);setInterval(loadGcalEvents,300000)}
 tickInt=setInterval(tick,1000);
 setInterval(()=>{const t=state.tasks.find(x=>x.timerStart);if(t){save()}},15000);
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
