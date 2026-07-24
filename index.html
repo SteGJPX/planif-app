@@ -70,13 +70,34 @@ section.view.active{display:block}
 .pbar{height:8px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden}
 .pbar>i{display:block;height:100%;background:var(--grad);border-radius:99px;transition:width .6s cubic-bezier(.22,1,.36,1)}
 
-/* ---------- Suggestion ---------- */
-.suggest{background:linear-gradient(135deg,rgba(124,108,255,.14),rgba(34,211,238,.08));border:1px solid rgba(124,108,255,.35);border-radius:var(--r);padding:1rem;margin-bottom:1.2rem}
-.suggest h3{font-size:.95rem;display:flex;align-items:center;gap:.5rem;margin-bottom:.55rem}
-.suggest .why{font-size:.83rem;color:var(--muted)}
-.suggest .s-task{display:flex;align-items:center;gap:.6rem;padding:.45rem 0;font-size:.93rem}
-.suggest .s-task b{font-weight:600}
-.suggest .rank{width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.1);display:grid;place-items:center;font-size:.72rem;font-weight:700;flex-shrink:0}
+/* ---------- Héro « Maintenant » ---------- */
+.hero{position:relative;background:linear-gradient(160deg,rgba(124,108,255,.13),rgba(34,211,238,.05)),var(--card);border:1px solid rgba(124,108,255,.35);border-radius:20px;padding:1.25rem 1.2rem;margin-bottom:.9rem;animation:fadeUp .4s ease both}
+.hero.running{border-color:var(--accent);box-shadow:0 0 0 1px rgba(124,108,255,.3),0 12px 40px rgba(124,108,255,.18)}
+.h-label{font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--accent2);font-weight:700;margin-bottom:.5rem}
+.h-title{font-size:1.25rem;font-weight:700;line-height:1.3;text-wrap:balance}
+.h-why{font-size:.83rem;color:var(--muted);margin-top:.3rem}
+.h-meta{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:.7rem}
+.h-timer{font-variant-numeric:tabular-nums;font-size:2.2rem;font-weight:800;letter-spacing:-.02em;margin-top:.7rem}
+.h-timer span{font-size:.95rem;color:var(--muted);font-weight:600}
+.hero .pbar{margin-top:.55rem}
+.hero .pbar>i.over{background:var(--hot)}
+.h-actions{display:flex;gap:.6rem;margin-top:1rem}
+.h-actions .btn{flex:1;padding:.8rem;font-size:1rem}
+.h-sub{display:flex;gap:.4rem;margin-top:.55rem;justify-content:center;flex-wrap:wrap}
+.h-sub button{font-size:.8rem;color:var(--muted);padding:.35rem .6rem;border-radius:8px;transition:.15s}
+.h-sub button:hover{color:var(--txt);background:var(--card-h)}
+/* ---------- Bandeau du jour ---------- */
+.strip{display:flex;align-items:center;gap:.55rem;font-size:.82rem;color:var(--muted);margin-bottom:1rem;padding:.7rem .9rem;background:var(--card);border:1px solid var(--border);border-radius:14px;flex-wrap:wrap}
+.strip b{color:var(--txt);font-weight:700;font-variant-numeric:tabular-nums}
+.strip .pbar{flex:1 1 100%;height:5px;margin-top:.2rem}
+/* ---------- Rangées compactes ---------- */
+.rowt{display:flex;align-items:center;gap:.7rem;padding:.6rem .8rem;background:var(--card);border:1px solid var(--border);border-radius:14px;transition:.2s;animation:fadeUp .35s ease both}
+.rowt:hover{background:var(--card-h);border-color:var(--border-h)}
+.rowt .pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.rowt .rt{flex:1;min-width:0;font-size:.92rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.rowt .re{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
+.rowt .t-btn{width:34px;height:34px;font-size:.8rem}
+.done-strip{margin-top:1.1rem;text-align:center;font-size:.82rem;color:var(--muted)}
 
 /* ---------- Cartes tâche ---------- */
 .task-list{display:flex;flex-direction:column;gap:.6rem}
@@ -202,10 +223,11 @@ section.view.active{display:block}
 
   <!-- ===== VUE AUJOURD'HUI ===== -->
   <section class="view active" id="view-today">
-    <div class="day-summary" id="daySummary"></div>
-    <div id="suggestBox"></div>
-    <div class="section-title">Ma journée</div>
+    <div id="heroBox"></div>
+    <div class="strip" id="dayStrip"></div>
+    <div class="section-title" id="nextTitle">Ensuite</div>
     <div class="task-list" id="todayList"></div>
+    <div class="done-strip" id="doneStrip"></div>
   </section>
 
   <!-- ===== VUE TÂCHES ===== -->
@@ -427,6 +449,10 @@ function tick(){
   if(!t){document.title='Planif — Mon assistant de journée';return}
   document.querySelectorAll('.task.running .t-timer').forEach(el=>{el.textContent='⏱ '+fmtMs(spentNow(t))+' / '+fmtMin(t.est)});
   document.querySelectorAll('.task.running .t-est-bar>i').forEach(bar=>{const pct=Math.min(100,spentNow(t)/(t.est*60000)*100);bar.style.width=pct+'%';bar.classList.toggle('over',spentNow(t)>t.est*60000)});
+  const ht=document.getElementById('heroTimer');
+  if(ht)ht.innerHTML=fmtMs(spentNow(t))+' <span>/ '+fmtMin(t.est)+'</span>';
+  const hb=document.getElementById('heroBar');
+  if(hb){hb.style.width=Math.min(100,spentNow(t)/(t.est*60000)*100)+'%';hb.classList.toggle('over',spentNow(t)>t.est*60000)}
   document.title='⏱ '+fmtMs(spentNow(t))+' — '+t.title;
 }
 
@@ -479,29 +505,28 @@ function render(){
   document.getElementById('cntToday').textContent=today.length;
   document.getElementById('cntTasks').textContent=open.length;
 
-  /* --- résumé jour --- */
+  /* --- héro : la tâche à attaquer maintenant (ou en cours) --- */
+  const running=state.tasks.find(t=>t.timerStart&&!t.done)||null;
+  const hero=running||today[0]||(open.slice().sort((a,b)=>score(b)-score(a))[0]||null);
+  renderHero(hero,!!running);
+
+  /* --- bandeau du jour --- */
   const estTotal=today.reduce((s,t)=>s+t.est,0);
-  const spentToday=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0)+(state.tasks.find(t=>t.timerStart)?Date.now()-state.tasks.find(t=>t.timerStart).timerStart:0);
-  const doneCount=doneToday.length, planCount=today.length+doneToday.filter(t=>t.today).length;
-  const pct=planCount?Math.round(doneToday.filter(t=>t.today).length/planCount*100):0;
-  document.getElementById('daySummary').innerHTML=`
-    <div class="stat-tile"><div class="v">${today.length}</div><div class="l">à faire</div></div>
-    <div class="stat-tile"><div class="v">${fmtMin(estTotal)||'0'}</div><div class="l">estimé restant</div></div>
-    <div class="stat-tile"><div class="v">${fmtMs(spentToday)}<span class="u"></span></div><div class="l">focus aujourd'hui</div></div>
-    <div class="progress-wrap"><div class="lbl"><span>Avancement de la journée</span><span>${doneToday.filter(t=>t.today||t.doneAt&&new Date(t.doneAt).toISOString().slice(0,10)===todayStr()).length} terminée(s) · ${pct}%</span></div>
-    <div class="pbar"><i style="width:${pct}%"></i></div></div>`;
+  const spentToday=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0)+(running?Date.now()-running.timerStart:0);
+  const planCount=today.length+doneToday.length;
+  const pct=planCount?Math.round(doneToday.length/planCount*100):0;
+  document.getElementById('dayStrip').innerHTML=
+    `<span><b>${today.length}</b> à faire</span><span>·</span>
+     <span><b>${fmtMin(estTotal)||'0 min'}</b> estimé</span><span>·</span>
+     <span>⏱ <b>${fmtMs(spentToday)}</b> focus</span>
+     <span style="margin-left:auto"><b>${pct}%</b></span>
+     <div class="pbar"><i style="width:${pct}%"></i></div>`;
 
-  /* --- suggestion --- */
-  const pool=(today.length?today:open).filter(t=>!t.done);
-  const top=pool.slice().sort((a,b)=>score(b)-score(a)).slice(0,3);
-  document.getElementById('suggestBox').innerHTML=top.length?`
-    <div class="suggest"><h3>🎯 Par quoi commencer ?</h3>
-    ${top.map((t,i)=>`<div class="s-task"><span class="rank">${i+1}</span><b>${esc(t.title)}</b><span class="why" style="margin-left:auto;flex-shrink:0">${whyLabel(t)}</span></div>`).join('')}
-    </div>`:'';
-
-  /* --- listes --- */
-  renderList('todayList',today,true);
-  if(!today.length)document.getElementById('todayList').innerHTML=`<div class="empty"><div class="e-ico">🏖️</div>Rien de prévu aujourd'hui.<br>Va dans <b>📋 Tâches</b> et ajoute ce que tu veux traiter avec ☀️.</div>`;
+  /* --- file « Ensuite » --- */
+  const rest=today.filter(t=>!hero||t.id!==hero.id);
+  document.getElementById('nextTitle').style.display=rest.length?'flex':'none';
+  document.getElementById('todayList').innerHTML=rest.map(compactRow).join('');
+  document.getElementById('doneStrip').innerHTML=doneToday.length?`✅ ${doneToday.length} terminée${doneToday.length>1?'s':''} aujourd'hui — bien joué`:'';
 
   renderFilters();
   const filtered=currentFilter==='all'?open:open.filter(t=>t.projectId===currentFilter);
@@ -514,6 +539,47 @@ function render(){
 
   renderStats();
   tick();
+}
+
+function subsBlock(t){
+  if(!t.subtasks.length)return'';
+  const d=t.subtasks.filter(s=>s.done).length;
+  return `<span class="subs-toggle" onclick="toggleSubsOpen('${t.id}')">${t.subsOpen?'▾':'▸'} Étapes ${d}/${t.subtasks.length}</span>`+
+    (t.subsOpen?`<div class="subs">${t.subtasks.map((s,i)=>`<div class="sub ${s.done?'sdone':''}" onclick="toggleSub('${t.id}',${i})"><span class="sc">✓</span>${esc(s.t)}</div>`).join('')}</div>`:'');
+}
+function renderHero(t,run){
+  const el=document.getElementById('heroBox');
+  if(!t){
+    el.innerHTML=`<div class="hero"><div class="h-label">🎯 Maintenant</div><div class="h-title">Journée libre !</div>
+      <div class="h-why">Ajoute des tâches puis marque-les ☀️ pour construire ta journée.</div>
+      <div class="h-actions"><button class="btn primary" onclick="startVoice()">🎤 Dicter une tâche</button><button class="btn ghost" onclick="openModal(null)">＋ Nouvelle tâche</button></div></div>`;
+    return;
+  }
+  const p=proj(t.projectId);
+  const chips=`<span class="chip"><span class="pdot" style="background:${p.color}"></span>${esc(p.name)}</span>`+badges(t).map(b=>`<span class="badge ${b[0]}">${b[1]}</span>`).join('');
+  if(run){
+    const over=spentNow(t)>t.est*60000;
+    const pctT=Math.min(100,spentNow(t)/(t.est*60000)*100);
+    el.innerHTML=`<div class="hero running"><div class="h-label">⏱ En cours</div><div class="h-title">${esc(t.title)}</div><div class="h-meta">${chips}</div>
+      <div class="h-timer" id="heroTimer">${fmtMs(spentNow(t))} <span>/ ${fmtMin(t.est)}</span></div>
+      <div class="pbar"><i id="heroBar" class="${over?'over':''}" style="width:${pctT}%"></i></div>
+      <div class="h-actions"><button class="btn ghost" onclick="toggleTimer('${t.id}')">❚❚ Pause</button><button class="btn primary" onclick="toggleDone('${t.id}')">✓ Terminé</button></div>
+      ${subsBlock(t)}</div>`;
+  }else{
+    el.innerHTML=`<div class="hero"><div class="h-label">🎯 À attaquer maintenant</div><div class="h-title">${esc(t.title)}</div>
+      <div class="h-why">${whyLabel(t)}</div><div class="h-meta">${chips}</div>
+      <div class="h-actions"><button class="btn primary" onclick="toggleTimer('${t.id}')">▶ Lancer · ${fmtMin(t.est)}</button></div>
+      <div class="h-sub"><button onclick="toggleDone('${t.id}')">✓ Déjà fait</button><button onclick="toggleToday('${t.id}')">↩︎ Reporter</button><button onclick="openEdit('${t.id}')">✎ Modifier</button></div>
+      ${subsBlock(t)}</div>`;
+  }
+}
+function compactRow(t){
+  const p=proj(t.projectId);
+  return `<div class="rowt"><span class="pdot" style="background:${p.color}"></span>
+    <span class="rt" onclick="openEdit('${t.id}')">${esc(t.title)}</span>
+    <span class="re">${fmtMin(t.est)}</span>
+    <button class="t-btn play" onclick="toggleTimer('${t.id}')" title="Démarrer">▶</button>
+    <button class="t-btn" onclick="toggleDone('${t.id}')" title="Terminer">✓</button></div>`;
 }
 
 let currentFilter='all';
