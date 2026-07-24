@@ -392,7 +392,10 @@ section.view.active{display:block}
       <div class="modal-actions"><button class="btn primary" onclick="showEodStep(2)">Préparer demain →</button></div>
     </div>
     <div id="eodStep2" style="display:none">
-      <p class="hint" style="margin-bottom:.8rem">Coche ce que tu veux attaquer demain. Conseil : reste sous ~6h d'estimé pour garder de la marge (imprévus, mails…).</p>
+      <div class="f-group"><label>Ma prochaine journée de travail</label>
+        <div class="dur-chips" id="eodDayChips"></div>
+      </div>
+      <p class="hint" style="margin-bottom:.8rem">Coche ce que tu veux attaquer ce jour-là. Conseil : reste sous ~6h d'estimé pour garder de la marge (imprévus, mails…).</p>
       <div class="task-list" id="eodTomorrowList"></div>
       <div class="strip" id="eodTotal" style="margin-top:.8rem;margin-bottom:0"></div>
       <div class="modal-actions">
@@ -576,7 +579,15 @@ function toggleSubsOpen(tid){
   t.subsOpen=!t.subsOpen;save();render();
 }
 /* ================= FIN DE JOURNÉE ================= */
-let eodSel=new Set();
+let eodSel=new Set(),eodDayOffset=1;
+function renderEodDays(){
+  const el=document.getElementById('eodDayChips');if(!el)return;
+  el.innerHTML=Array.from({length:7},(_,i)=>{
+    const off=i+1,d=new Date();d.setDate(d.getDate()+off);
+    const lbl=off===1?'Demain':d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
+    return `<button class="${eodDayOffset===off?'on':''}" onclick="eodDayOffset=${off};renderEodDays()">${lbl}</button>`;
+  }).join('');
+}
 function showEodStep(n){
   document.getElementById('eodStep1').style.display=n===1?'block':'none';
   document.getElementById('eodStep2').style.display=n===2?'block':'none';
@@ -604,8 +615,9 @@ function openEod(){
   else if(ratio<=140)verdict='Tu as dépassé un peu tes estimations (+'+(ratio-100)+'%) — prévois une petite marge demain.';
   else verdict='Grosses sous-estimations aujourd\'hui (+'+(ratio-100)+'%) — demain, découpe les grosses tâches en étapes plus petites.';
   document.getElementById('eodVerdict').innerHTML='<p class="hint" style="font-size:.9rem">'+verdict+'</p>';
-  /* pré-sélection demain : les tâches du jour non finies */
+  /* pré-sélection : les tâches du jour non finies */
   eodSel=new Set(state.tasks.filter(t=>!t.done&&t.today).map(t=>t.id));
+  eodDayOffset=1;renderEodDays();
   renderEodTomorrow();
   showEodStep(1);
   document.getElementById('eodOverlay').classList.add('open');
@@ -629,9 +641,12 @@ function closeDay(){
   state.archive=(state.archive||[]).concat(done.map(t=>({title:t.title,projectId:t.projectId,est:t.est,spent:t.spent,doneAt:t.doneAt||Date.now()})));
   state.tasks=state.tasks.filter(t=>!t.done);
   state.tasks.forEach(t=>t.today=eodSel.has(t.id));
+  const d=new Date();d.setDate(d.getDate()+eodDayOffset);
+  state.nextWorkDay=eodDayOffset>1?localDS(d):null;
   save();render();
   document.getElementById('eodOverlay').classList.remove('open');
-  toast('🌙 Journée clôturée — demain est prêt ('+eodSel.size+' tâche'+(eodSel.size>1?'s':'')+'). Repose-toi bien !');
+  const when=eodDayOffset===1?'demain':d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'});
+  toast('🌙 Journée clôturée — prochaine journée : '+when+' ('+eodSel.size+' tâche'+(eodSel.size>1?'s':'')+' prête'+(eodSel.size>1?'s':'')+').'+(eodDayOffset>1?' Bon repos ! 🏖️':' Repose-toi bien !'));
 }
 
 /* ================= RENDER ================= */
@@ -645,10 +660,14 @@ function render(){
   document.getElementById('cntToday').textContent=today.length;
   document.getElementById('cntTasks').textContent=open.length;
 
-  /* --- héro : la tâche à attaquer maintenant (ou en cours) --- */
+  /* --- héro : la tâche à attaquer maintenant (ou en cours, ou repos) --- */
+  if(state.nextWorkDay&&state.nextWorkDay<=todayStr()){state.nextWorkDay=null;save()}
+  const resting=!!(state.nextWorkDay&&state.nextWorkDay>todayStr());
   const running=state.tasks.find(t=>t.timerStart&&!t.done)||null;
   const hero=running||today[0]||(open.slice().sort((a,b)=>score(b)-score(a))[0]||null);
-  renderHero(hero,!!running);
+  if(resting&&!running)renderRestHero(today);
+  else renderHero(hero,!!running);
+  document.getElementById('nextTitle').textContent=resting&&!running?'Prêt pour '+new Date(state.nextWorkDay).toLocaleDateString('fr-FR',{weekday:'long'}):'Ensuite';
 
   /* --- bandeau du jour --- */
   const estTotal=today.reduce((s,t)=>s+t.est,0);
@@ -665,7 +684,7 @@ function render(){
      <div class="pbar"><i style="width:${pct}%"></i></div>`;
 
   /* --- file « Ensuite » --- */
-  const rest=today.filter(t=>!hero||t.id!==hero.id);
+  const rest=resting&&!running?today:today.filter(t=>!hero||t.id!==hero.id);
   document.getElementById('nextTitle').style.display=rest.length?'flex':'none';
   document.getElementById('todayList').innerHTML=rest.map(compactRow).join('');
   document.getElementById('doneStrip').innerHTML=doneToday.length?`✅ ${doneToday.length} terminée${doneToday.length>1?'s':''} aujourd'hui — bien joué`:'';
@@ -691,6 +710,14 @@ function subsBlock(t){
   const d=t.subtasks.filter(s=>s.done).length;
   return `<span class="subs-toggle" onclick="toggleSubsOpen('${t.id}')">${t.subsOpen?'▾':'▸'} Étapes ${d}/${t.subtasks.length}</span>`+
     (t.subsOpen?`<div class="subs">${t.subtasks.map((s,i)=>`<div class="sub ${s.done?'sdone':''}" onclick="toggleSub('${t.id}',${i})"><span class="sc">✓</span>${esc(s.t)}</div>`).join('')}</div>`:'');
+}
+function renderRestHero(today){
+  const d=new Date(state.nextWorkDay);
+  const est=today.reduce((s,t)=>s+t.est,0);
+  document.getElementById('heroBox').innerHTML=`<div class="hero"><div class="h-label">🏖️ Repos</div>
+    <div class="h-title">Prochaine journée : ${d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+    <div class="h-why">${today.length?today.length+' tâche'+(today.length>1?'s':'')+' prête'+(today.length>1?'s':'')+' · '+fmtMin(est)+' estimé. Tout est calé — profite !':'Rien de planifié pour l\'instant — profite !'}</div>
+    <div class="h-sub"><button onclick="state.nextWorkDay=null;save();render();toast('💪 Mode travail réactivé')">💪 Finalement, je bosse aujourd'hui</button></div></div>`;
 }
 function renderHero(t,run){
   const el=document.getElementById('heroBox');
@@ -1292,8 +1319,9 @@ function renderCockpit(){
       ...due.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">⏰ ${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`),
       ...planned.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`)
     ];
-    days.push(`<div class="ck-day ${i===0?'todayd':''}">
-      <div class="ck-date"><span>${i===0?'Aujourd\'hui':d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}</span>
+    const off=state.nextWorkDay&&ds>todayStr()&&ds<state.nextWorkDay;
+    days.push(`<div class="ck-day ${i===0?'todayd':''}" ${off?'style="opacity:.55"':''}>
+      <div class="ck-date"><span>${i===0?'Aujourd\'hui':d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}${off?' 🏖️':''}</span>
       ${load>0?`<span class="ck-load">${load>=360?'🔴':load>=240?'🟠':'🟢'} ~${fmtMin(Math.round(load))}</span>`:''}</div>
       ${items.length?items.join(''):'<div class="ck-empty">Rien de planifié</div>'}
     </div>`);
