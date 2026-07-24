@@ -98,6 +98,10 @@ section.view.active{display:block}
 .rowt .re{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
 .rowt .t-btn{width:34px;height:34px;font-size:.8rem}
 .done-strip{margin-top:1.1rem;text-align:center;font-size:.82rem;color:var(--muted)}
+.sc-box{width:22px;height:22px;border-radius:7px;border:2px solid var(--faint);flex-shrink:0;display:grid;place-items:center;font-size:.75rem;color:transparent;transition:.15s}
+.rowt.selrow{cursor:pointer;user-select:none}
+.rowt.selrow.on{border-color:rgba(124,108,255,.5);background:rgba(124,108,255,.08)}
+.rowt.selrow.on .sc-box{background:var(--grad);border-color:transparent;color:#fff}
 
 /* ---------- Cartes tâche ---------- */
 .task-list{display:flex;flex-direction:column;gap:.6rem}
@@ -228,6 +232,7 @@ section.view.active{display:block}
     <div class="section-title" id="nextTitle">Ensuite</div>
     <div class="task-list" id="todayList"></div>
     <div class="done-strip" id="doneStrip"></div>
+    <button class="btn ghost" id="btnEod" style="width:100%;margin-top:1rem;display:none" onclick="openEod()">🌙 Clôturer ma journée</button>
   </section>
 
   <!-- ===== VUE TÂCHES ===== -->
@@ -317,10 +322,32 @@ section.view.active{display:block}
       <button class="btn ghost" onclick="exportJSON()">💾 Exporter mes données (JSON)</button>
       <button class="btn ghost" onclick="document.getElementById('importFile').click()">📂 Importer une sauvegarde</button>
       <button class="btn ghost" onclick="exportICS()">📅 Exporter vers Google Agenda (.ics)</button>
-      <button class="btn danger" onclick="resetDay()">🌙 Clôturer la journée (retirer les tâches finies)</button>
+      <button class="btn ghost" onclick="document.getElementById('menuOverlay').classList.remove('open');openEod()">🌙 Bilan & clôture de journée</button>
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none">
     <p class="hint" style="margin-top:1rem">💡 Le fichier .ics s'importe dans Google Agenda (Paramètres → Importer) : chaque tâche avec une échéance devient un événement.</p>
+  </div>
+</div>
+
+<!-- ===== MODAL FIN DE JOURNÉE ===== -->
+<div class="overlay" id="eodOverlay">
+  <div class="modal">
+    <h2><span id="eodTitle">🌙 Bilan de la journée</span><button class="close-x" onclick="document.getElementById('eodOverlay').classList.remove('open')">✕</button></h2>
+    <div id="eodStep1">
+      <div class="day-summary" id="eodStats" style="margin-bottom:1rem"></div>
+      <div class="task-list" id="eodDoneList" style="margin-bottom:1rem"></div>
+      <div class="card-block" id="eodVerdict"></div>
+      <div class="modal-actions"><button class="btn primary" onclick="showEodStep(2)">Préparer demain →</button></div>
+    </div>
+    <div id="eodStep2" style="display:none">
+      <p class="hint" style="margin-bottom:.8rem">Coche ce que tu veux attaquer demain. Conseil : reste sous ~6h d'estimé pour garder de la marge (imprévus, mails…).</p>
+      <div class="task-list" id="eodTomorrowList"></div>
+      <div class="strip" id="eodTotal" style="margin-top:.8rem;margin-bottom:0"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" onclick="showEodStep(1)">← Bilan</button>
+        <button class="btn primary" onclick="closeDay()">Valider & clôturer 🌙</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -485,13 +512,63 @@ function toggleSubsOpen(tid){
   const t=state.tasks.find(x=>x.id===tid);
   t.subsOpen=!t.subsOpen;save();render();
 }
-function resetDay(){
-  const doneToday=state.tasks.filter(t=>t.done).length;
+/* ================= FIN DE JOURNÉE ================= */
+let eodSel=new Set();
+function showEodStep(n){
+  document.getElementById('eodStep1').style.display=n===1?'block':'none';
+  document.getElementById('eodStep2').style.display=n===2?'block':'none';
+  document.getElementById('eodTitle').textContent=n===1?'🌙 Bilan de la journée':'☀️ Préparer demain';
+}
+function openEod(){
+  const running=state.tasks.find(t=>t.timerStart);
+  if(running){stopTimer(running,true);save()}
+  const done=state.tasks.filter(t=>t.done);
+  const focus=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0);
+  const timed=done.filter(t=>t.spent>0&&t.est>0);
+  const ratio=timed.length?Math.round(timed.reduce((s,t)=>s+t.spent,0)/timed.reduce((s,t)=>s+t.est*60000,0)*100):null;
+  document.getElementById('eodStats').innerHTML=`
+    <div class="stat-tile"><div class="v">${done.length}</div><div class="l">terminée${done.length>1?'s':''}</div></div>
+    <div class="stat-tile"><div class="v">${fmtMs(focus)}</div><div class="l">focus</div></div>
+    <div class="stat-tile"><div class="v">${ratio!==null?ratio+'%':'—'}</div><div class="l">réel vs estimé</div></div>`;
+  document.getElementById('eodDoneList').innerHTML=done.length
+    ?done.map(t=>`<div class="rowt"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="rt" style="cursor:default">${esc(t.title)}</span><span class="re">${t.spent>0?fmtMs(t.spent):'—'}</span></div>`).join('')
+    :'<p class="hint">Aucune tâche terminée aujourd\'hui.</p>';
+  let verdict;
+  if(!done.length&&focus===0)verdict='Journée off ou tout en préparation — demain est un autre jour 💪';
+  else if(ratio===null)verdict='Belle journée ! Pense à lancer le timer ▶ demain pour mesurer tes estimations.';
+  else if(ratio<70)verdict='Tu as surestimé aujourd\'hui ('+ratio+'% du temps prévu) — demain tu peux planifier plus ambitieux 💪';
+  else if(ratio<=105)verdict='🎯 Tes estimations étaient très justes aujourd\'hui — tu te connais bien.';
+  else if(ratio<=140)verdict='Tu as dépassé un peu tes estimations (+'+(ratio-100)+'%) — prévois une petite marge demain.';
+  else verdict='Grosses sous-estimations aujourd\'hui (+'+(ratio-100)+'%) — demain, découpe les grosses tâches en étapes plus petites.';
+  document.getElementById('eodVerdict').innerHTML='<p class="hint" style="font-size:.9rem">'+verdict+'</p>';
+  /* pré-sélection demain : les tâches du jour non finies */
+  eodSel=new Set(state.tasks.filter(t=>!t.done&&t.today).map(t=>t.id));
+  renderEodTomorrow();
+  showEodStep(1);
+  document.getElementById('eodOverlay').classList.add('open');
+}
+function renderEodTomorrow(){
+  const open=state.tasks.filter(t=>!t.done).sort((a,b)=>score(b)-score(a));
+  document.getElementById('eodTomorrowList').innerHTML=open.length?open.map(t=>{
+    const on=eodSel.has(t.id);
+    return `<div class="rowt selrow ${on?'on':''}" onclick="toggleEodSel('${t.id}')">
+      <span class="sc-box">✓</span><span class="pdot" style="background:${proj(t.projectId).color}"></span>
+      <span class="rt">${esc(t.title)}</span>
+      <span class="re">${fmtMin(t.est)}${badges(t).some(b=>b[0]==='hot'||b[0]==='soon')?' ⏰':''}</span></div>`;
+  }).join(''):'<p class="hint">Plus aucune tâche en attente — ajoute-en depuis 📋 Tâches.</p>';
+  const tot=state.tasks.filter(t=>eodSel.has(t.id)).reduce((s,t)=>s+t.est,0);
+  document.getElementById('eodTotal').innerHTML=`<span><b>${eodSel.size}</b> tâche${eodSel.size>1?'s':''} pour demain</span><span>·</span><span><b>${fmtMin(tot)||'0 min'}</b> estimé</span>`
+    +(tot>360?`<span style="margin-left:auto;color:var(--warn)">⚠️ chargé</span>`:`<span style="margin-left:auto;color:var(--ok)">✓ tenable</span>`);
+}
+function toggleEodSel(id){eodSel.has(id)?eodSel.delete(id):eodSel.add(id);renderEodTomorrow()}
+function closeDay(){
+  const done=state.tasks.filter(t=>t.done);
+  state.archive=(state.archive||[]).concat(done.map(t=>({title:t.title,projectId:t.projectId,est:t.est,spent:t.spent,doneAt:t.doneAt||Date.now()})));
   state.tasks=state.tasks.filter(t=>!t.done);
-  state.tasks.forEach(t=>t.today=false);
+  state.tasks.forEach(t=>t.today=eodSel.has(t.id));
   save();render();
-  document.getElementById('menuOverlay').classList.remove('open');
-  toast('🌙 Journée clôturée — '+doneToday+' tâche(s) archivée(s). À demain !');
+  document.getElementById('eodOverlay').classList.remove('open');
+  toast('🌙 Journée clôturée — demain est prêt ('+eodSel.size+' tâche'+(eodSel.size>1?'s':'')+'). Repose-toi bien !');
 }
 
 /* ================= RENDER ================= */
@@ -527,6 +604,7 @@ function render(){
   document.getElementById('nextTitle').style.display=rest.length?'flex':'none';
   document.getElementById('todayList').innerHTML=rest.map(compactRow).join('');
   document.getElementById('doneStrip').innerHTML=doneToday.length?`✅ ${doneToday.length} terminée${doneToday.length>1?'s':''} aujourd'hui — bien joué`:'';
+  document.getElementById('btnEod').style.display=(today.length+doneToday.length)?'block':'none';
 
   renderFilters();
   const filtered=currentFilter==='all'?open:open.filter(t=>t.projectId===currentFilter);
@@ -630,7 +708,7 @@ function renderStats(){
   recent.forEach(l=>{byProj[l.projectId]=(byProj[l.projectId]||0)+l.ms});
   if(running)byProj[running.projectId]=(byProj[running.projectId]||0)+(Date.now()-running.timerStart);
   const total=Object.values(byProj).reduce((a,b)=>a+b,0);
-  const doneAll=state.tasks.filter(t=>t.done);
+  const doneAll=state.tasks.filter(t=>t.done).concat(state.archive||[]);
 
   document.getElementById('statsTiles').innerHTML=`
     <div class="stat-tile"><div class="v">${fmtMs(total)}</div><div class="l">focus / 7 jours</div></div>
