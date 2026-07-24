@@ -345,7 +345,8 @@ section.view.active{display:block}
     <div class="section-title">📅 Google Agenda</div>
     <div class="f-group" id="gcalIdGroup"><label>Client ID Google OAuth</label><input id="gcalClientId" placeholder="…apps.googleusercontent.com"></div>
     <button class="btn ghost" style="width:100%" onclick="gcalConnect(true)">📅 Connecter mon compte Google</button>
-    <p class="hint" id="gcalStatus" style="margin:.5rem 0 1rem">Affiche tes rendez-vous du jour dans le dashboard et calcule ton temps réellement disponible. Lecture seule, connexion directe navigateur → Google (aucun serveur tiers).</p>
+    <p class="hint" id="gcalStatus" style="margin:.5rem 0 .3rem">Affiche tes rendez-vous du jour dans le dashboard et calcule ton temps réellement disponible. Lecture seule, connexion directe navigateur → Google (aucun serveur tiers).</p>
+    <p class="hint" id="mailStatus" style="margin:0 0 1rem"></p>
     <div class="section-title">💾 Sauvegarde manuelle</div>
     <p class="hint" style="margin-bottom:1rem">Tes données restent sur cet appareil (aucun serveur). L'export JSON sert de sauvegarde ou de transfert manuel.</p>
     <div style="display:flex;flex-direction:column;gap:.6rem">
@@ -1076,13 +1077,16 @@ function renderAgenda(){
 
 /* ================= SUGGESTIONS MAIL (lecture seule) ================= */
 let mailSug=null,mailSugOpen=false;
+function setMailStatus(m){const el=document.getElementById('mailStatus');if(el)el.textContent=m}
 async function loadMail(){
-  if(!gcal.token||Date.now()>gcal.exp)return;
+  if(!gcal.token||Date.now()>gcal.exp){setMailStatus('📥 Mails : en attente de connexion Google');return}
   const H={headers:{Authorization:'Bearer '+gcal.token}};
   try{
     const q=encodeURIComponent('in:inbox -category:promotions -category:social -category:updates newer_than:3d');
     const r=await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=15&q='+q,H);
-    if(!r.ok){mailSug=[];renderMailSug();return}
+    if(r.status===403){setMailStatus('⚠️ Mails inaccessibles : active « Gmail API » dans Google Cloud (API et services → Bibliothèque → Gmail API → Activer), puis reconnecte-toi ici.');mailSug=[];renderMailSug();return}
+    if(r.status===401){setMailStatus('⚠️ Mails : reconnecte ton compte Google (bouton ci-dessus) pour accorder l\'accès lecture.');mailSug=[];renderMailSug();return}
+    if(!r.ok){setMailStatus('⚠️ Mails : erreur '+r.status);mailSug=[];renderMailSug();return}
     const ids=((await r.json()).messages||[]);
     state.mailSeen=state.mailSeen||[];
     const seen=new Map(state.mailSeen.map(m=>[m.id,m]));
@@ -1107,8 +1111,9 @@ async function loadMail(){
       }catch(e){return null}
     }));
     mailSug=metas.filter(Boolean);
+    setMailStatus('📥 Mails : '+ids.length+' reçu(s) sur 3 jours · '+fresh.length+' analysé(s) · '+mailSug.length+' suggestion(s) retenue(s)');
     renderMailSug();
-  }catch(e){}
+  }catch(e){setMailStatus('⚠️ Mails : '+e.message)}
 }
 function markMail(id,action){
   state.mailSeen=state.mailSeen||[];
