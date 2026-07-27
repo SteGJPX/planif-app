@@ -242,6 +242,14 @@ section.view.active{display:block}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
 @keyframes pulseTxt{0%,100%{opacity:1}50%{opacity:.45}}
+/* ---------- Accueil motivant ---------- */
+.greet{margin-bottom:1rem;animation:fadeUp .5s ease both}
+.greet-hi{font-size:1.15rem;font-weight:800;letter-spacing:-.01em}
+.greet-msg{font-size:.9rem;color:var(--accent2);margin-top:.15rem;font-weight:500;text-wrap:balance}
+.greet-meta{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.55rem}
+.greet-pill{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:600;padding:.25rem .6rem;border-radius:999px;background:var(--card);border:1px solid var(--border)}
+.greet-pill.fire{background:linear-gradient(135deg,rgba(251,113,133,.16),rgba(251,146,60,.12));border-color:rgba(251,146,60,.35);color:#fdba74}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:300}
 .mic-btn.listening{background:rgba(251,113,133,.18)!important;border-color:var(--hot)!important;animation:micPulse 1.2s ease-out infinite}
 @keyframes micPulse{0%{box-shadow:0 0 0 0 rgba(251,113,133,.45)}70%{box-shadow:0 0 0 10px rgba(251,113,133,0)}100%{box-shadow:0 0 0 0 rgba(251,113,133,0)}}
 </style>
@@ -261,6 +269,7 @@ section.view.active{display:block}
 
   <!-- ===== VUE AUJOURD'HUI ===== -->
   <section class="view active" id="view-today">
+    <div id="greetBox"></div>
     <div id="heroBox"></div>
     <div class="strip" id="dayStrip"></div>
     <div id="agendaBox"></div>
@@ -379,6 +388,9 @@ section.view.active{display:block}
     <button class="btn ghost" style="width:100%" onclick="gcalConnect(true)">📅 Connecter mon compte Google</button>
     <p class="hint" id="gcalStatus" style="margin:.5rem 0 .3rem">Affiche tes rendez-vous du jour dans le dashboard et calcule ton temps réellement disponible. Lecture seule, connexion directe navigateur → Google (aucun serveur tiers).</p>
     <p class="hint" id="mailStatus" style="margin:0 0 1rem"></p>
+    <div class="section-title">🧭 Mon rythme de travail</div>
+    <p class="hint" style="margin-bottom:.5rem">Adapte l'app à ton contrat (43h, 31h, temps partiel…). C'est la base de calcul de tes journées « pleines » et de ce qui tient dans une journée.</p>
+    <div id="profileBox" style="margin-bottom:1rem"></div>
     <div class="section-title">☕ Bien-être & performance</div>
     <p class="hint" style="margin-bottom:.5rem">Rester concentré, c'est bien ; couper au bon moment, c'est mieux. L'app te suggère une micro-pause après une longue session de focus.</p>
     <div id="wellbeingBox" style="margin-bottom:1rem"></div>
@@ -758,8 +770,10 @@ function suggestCap(){
   eodCap=suggestCapFor(localDS(d));
   renderEodCap();
 }
+function eodTargetDs(){const d=new Date();d.setDate(d.getDate()+eodDayOffset);return localDS(d)}
+function setEodCap(v){eodCap=v;renderEodCap();renderEodTomorrow()}
 function renderEodCap(){
-  document.querySelectorAll('#eodCapSeg button').forEach(b=>b.classList.toggle('on',+b.dataset.v===eodCap));
+  document.getElementById('eodCapSeg').innerHTML=capSegHTML(dayFullMin(eodTargetDs()),eodCap,'setEodCap');
 }
 function showEodStep(n){
   document.getElementById('eodStep1').style.display=n===1?'block':'none';
@@ -805,8 +819,9 @@ function renderEodTomorrow(){
       <span class="re">${fmtMin(t.est)}${badges(t).some(b=>b[0]==='hot'||b[0]==='soon')?' ⏰':''}</span></div>`;
   }).join(''):'<p class="hint">Plus aucune tâche en attente — ajoute-en depuis 📋 Tâches.</p>';
   const tot=state.tasks.filter(t=>eodSel.has(t.id)).reduce((s,t)=>s+t.est,0);
-  const over=tot>eodCap;
-  document.getElementById('eodTotal').innerHTML=`<span><b>${eodSel.size}</b> tâche${eodSel.size>1?'s':''}</span><span>·</span><span><b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(eodCap)} dispo</span>`
+  const budget=Math.max(0,eodCap-dayReserve());
+  const over=tot>budget;
+  document.getElementById('eodTotal').innerHTML=`<span><b>${eodSel.size}</b> tâche${eodSel.size>1?'s':''}</span><span>·</span><span><b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(budget)} pour les tâches</span>`
     +(over?`<span style="margin-left:auto;color:var(--warn)">⚠️ trop chargé</span>`:`<span style="margin-left:auto;color:var(--ok)">✓ tenable</span>`);
 }
 function toggleEodSel(id){eodSel.has(id)?eodSel.delete(id):eodSel.add(id);renderEodTomorrow()}
@@ -838,8 +853,9 @@ function closeDay(){
 function dayCap(ds){
   if(state.days&&state.days[ds]!==undefined)return state.days[ds];
   if(state.dayCapacity&&state.dayCapacity.date===ds)return state.dayCapacity.mins;
-  return 360;
+  return dayFullMin(ds);
 }
+function capLabelDs(ds,cap){const full=dayFullMin(ds);if(cap===0)return'repos';if(cap>=full*0.8)return'';if(cap>=full*0.45)return'partielle';return'légère';}
 function isRest(ds){
   if(dayCap(ds)===0)return true;
   if(state.nextWorkDay&&ds>=todayStr()&&ds<state.nextWorkDay)return true;
@@ -860,10 +876,10 @@ function commitmentsFor(ds){return (state.commitments||[]).filter(c=>c.date===ds
 function commitBusyMin(ds){return commitmentsFor(ds).reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)}
 function gcalBusyMin(ds){return eventsForDay(ds).reduce((s,e)=>e.start&&e.start.dateTime?s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000:s,0)}
 function dayBusyMin(ds){return commitBusyMin(ds)+gcalBusyMin(ds)}
-function suggestCapFor(ds){const busy=dayBusyMin(ds);return busy>=240?90:busy>=90?180:360}
+function suggestCapFor(ds){const full=dayFullMin(ds),busy=dayBusyMin(ds),av=full-busy;if(av<=0)return 0;if(av>=full*0.75)return full;if(av>=full*0.4)return round15(full/2);return round15(full/4)}
 function todayCapacity(){
-  const c=dayCap(todayStr());
-  return (c>0&&c<360)?c:null;
+  const ds=todayStr(),c=dayCap(ds);
+  return (c>0&&c<dayFullMin(ds))?c:null;
 }
 
 /* ================= RENDER ================= */
@@ -904,7 +920,7 @@ function render(){
      <span><b>${fmtMin(estTotal)||'0 min'}</b> estimé${cap?' / '+fmtMin(cap)+' dispo':''}</span><span>·</span>
      <span>⏱ <b>${fmtMs(spentToday)}</b> focus</span>
      ${busy>0?`<span>·</span><span>📅 <b>${fmtMs(busy)}</b> de RDV</span>`:''}
-     ${cap?`<span class="cap-chip" style="margin-left:auto">${cap>=180?'🕐 partielle':'🔋 légère'}${capOver?' · ⚠️ trop chargé':''}</span>`:`<span style="margin-left:auto"><b>${pct}%</b></span>`}
+     ${cap?`<span class="cap-chip" style="margin-left:auto">🕐 ${capLabelDs(todayStr(),cap)}${capOver?' · ⚠️ trop chargé':''}</span>`:`<span style="margin-left:auto"><b>${pct}%</b></span>`}
      <div class="pbar"><i style="width:${pct}%"></i></div>`;
 
   /* --- file « Ensuite » --- */
@@ -923,6 +939,7 @@ function render(){
   document.getElementById('doneTitle').style.display=doneRecent.length?'flex':'none';
   renderList('doneList',doneRecent,false);
 
+  renderGreeting();
   renderStats();
   renderCockpit();
   renderAgenda();
@@ -956,7 +973,7 @@ function workTodayAnyway(){
 }
 function renderHero(t,run,cap){
   const el=document.getElementById('heroBox');
-  const capNote=cap?`<div class="h-why" style="color:var(--warn);margin-bottom:.2rem">${cap>=180?'🕐 Journée partielle':'🔋 Journée légère'} · ~${fmtMin(cap)} de vrai travail dispo — vise l'essentiel</div>`:'';
+  const capNote=cap?`<div class="h-why" style="color:var(--warn);margin-bottom:.2rem">${capLabelDs(todayStr(),cap)==='légère'?'🔋 Journée légère':'🕐 Journée partielle'} · ~${fmtMin(Math.max(0,cap-dayReserve()))} pour tes tâches — vise l'essentiel</div>`:'';
   if(!t){
     el.innerHTML=`<div class="hero"><div class="h-label">🎯 Maintenant</div>${capNote}<div class="h-title">Journée libre !</div>
       <div class="h-why">Ajoute des tâches puis marque-les ☀️ pour construire ta journée.</div>
@@ -1257,7 +1274,7 @@ document.getElementById('btnMenu').addEventListener('click',()=>{
   document.getElementById('gcalClientId').value=gcal.clientId||'';
   document.getElementById('gcalIdGroup').style.display=GCAL_DEFAULT_CLIENT_ID?'none':'block';
   if(gcal.token&&Date.now()<gcal.exp)document.getElementById('gcalStatus').textContent='✅ Google Agenda connecté';
-  renderWellbeing();renderBackups();
+  renderProfile();renderWellbeing();renderBackups();
   document.getElementById('menuOverlay').classList.add('open');
 });
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
@@ -1273,6 +1290,46 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('clic
 }));
 
 /* ================= SYNC CLOUD (GitHub privé) ================= */
+/* ===== Profil de travail (heures/jour selon le contrat) + réserve « divers » ===== */
+let profile=JSON.parse(localStorage.getItem('planif.profile')||'null');
+function saveProfile(){localStorage.setItem('planif.profile',JSON.stringify(profile))}
+function round15(m){return Math.round(m/15)*15}
+function dayFullMin(ds){
+  if(profile&&Array.isArray(profile.days)){const m=profile.days[new Date(ds+'T00:00:00').getDay()];if(typeof m==='number')return m;}
+  return 360;
+}
+function dayReserve(){return (profile&&+profile.reserve)||0}
+function capSegHTML(full,sel,fn){
+  const half=round15(full/2)||0,q=round15(full/4)||0;
+  return [[full,'💪 Pleine'],[half,'🕐 Partielle'],[q,'🔋 Légère'],[0,'🌙 Repos']]
+    .map(([v,l])=>`<button class="${v===sel?'on':''}" onclick="${fn}(${v})">${l}<br><small>${v?fmtMin(v):'—'}</small></button>`).join('');
+}
+function renderProfile(){
+  const el=document.getElementById('profileBox');if(!el)return;
+  const p=profile||{days:[0,360,360,360,360,360,0],reserve:0};
+  const dn=['D','L','M','M','J','V','S'];
+  const weekly=p.days.reduce((s,m)=>s+m,0);
+  el.innerHTML=`<div class="f-group"><label>Mon prénom (pour l'accueil)</label><input value="${esc(p.name||'')}" placeholder="Ton prénom" oninput="ensureProfile();profile.name=this.value.slice(0,20);saveProfile()"></div>
+    <p class="hint" style="margin-bottom:.5rem">Total : <b>${fmtMin(weekly)}</b>/semaine. Touche un jour pour régler ses heures.</p>
+    <div class="dur-chips" style="margin-bottom:.6rem">${p.days.map((m,i)=>`<button class="${m>0?'on':''}" onclick="editDayHours(${i})">${dn[i]}<br><small style="font-size:.62rem">${m?fmtMin(m):'—'}</small></button>`).join('')}</div>
+    <div class="f-group" style="margin-bottom:0"><label>Réserve « divers » par jour (mails, lecture, imprévus…)</label>
+      <select onchange="setReserve(this.value)" style="width:auto">
+        ${[0,30,45,60,90,120].map(v=>`<option value="${v}"${(+p.reserve||0)===v?' selected':''}>${v?fmtMin(v):'aucune'}</option>`).join('')}
+      </select>
+      <p class="hint" style="margin-top:.3rem">Ce temps est déduit de ta dispo « tâches » chaque jour, car ces activités prennent du temps sans être chronométrées.</p>
+    </div>`;
+}
+function ensureProfile(){if(!profile)profile={days:[0,360,360,360,360,360,0],reserve:0}}
+function editDayHours(i){
+  ensureProfile();
+  const cur=profile.days[i]||0;
+  const v=prompt('Heures de travail ce jour-là (ex : 8, 8.5, 4, 0 pour repos) :',cur?(cur/60):'');
+  if(v===null)return;
+  const h=parseFloat((v||'').replace(',','.'));
+  profile.days[i]=isNaN(h)?0:Math.max(0,Math.min(16,round15(h*60)));
+  saveProfile();renderProfile();
+}
+function setReserve(v){ensureProfile();profile.reserve=+v;saveProfile();renderProfile()}
 let wellbeing=JSON.parse(localStorage.getItem('planif.wellbeing')||'null')||{breaks:true,interval:50};
 function saveWellbeing(){localStorage.setItem('planif.wellbeing',JSON.stringify(wellbeing))}
 function toggleBreaks(){wellbeing.breaks=!wellbeing.breaks;saveWellbeing();renderWellbeing();toast(wellbeing.breaks?'☕ Rappels de pause activés':'Rappels de pause désactivés')}
@@ -1570,6 +1627,82 @@ function shareWeek(){
 }
 
 /* ================= VUE SEMAINE (cockpit) ================= */
+/* ===== Accueil motivant + gamification ===== */
+const GREET_MSGS=[
+  'Une tâche à la fois, et la montagne se gravit. 💪',
+  'Le plus dur, c\'est de commencer — après, ça roule. 🚀',
+  'Aujourd\'hui compte. Fais-en une belle journée. ✨',
+  'Fini vaut mieux que parfait. Avance ! ⚡',
+  'Ton futur toi te dira merci pour ce que tu fais maintenant. 🙌',
+  'Concentre-toi sur l\'essentiel, le reste suivra. 🎯',
+  'Chaque tâche cochée, c\'est une victoire. Collectionne-les. ✅',
+  'Respire, priorise, exécute. Tu gères. 🧘',
+  'La régularité bat l\'intensité. Un pas aujourd\'hui. 👣',
+  'Transforme ta to-do en ta-da ! 🎉',
+  'Moins de « demain », plus de « c\'est fait ». 🔥',
+  'Tu es à un démarrage de timer d\'une journée productive. ▶️'
+];
+function activeDaysSet(){
+  const set=new Set();
+  (state.log||[]).forEach(l=>set.add(l.date));
+  state.tasks.forEach(t=>{if(t.doneAt)set.add(localDS(new Date(t.doneAt)))});
+  (state.archive||[]).forEach(a=>{if(a.doneAt)set.add(localDS(new Date(a.doneAt)))});
+  return set;
+}
+function streakDays(){
+  const set=activeDaysSet();
+  let n=0;const d=new Date();
+  /* si rien aujourd'hui, on démarre le compte à hier (la série n'est pas encore rompue) */
+  if(!set.has(localDS(d)))d.setDate(d.getDate()-1);
+  while(set.has(localDS(d))){n++;d.setDate(d.getDate()-1)}
+  return n;
+}
+function renderGreeting(){
+  const el=document.getElementById('greetBox');if(!el)return;
+  const h=new Date().getHours();
+  const hi=h<12?'Bonjour':h<18?'Bel après-midi':'Bonne soirée';
+  const emo=h<12?'☀️':h<18?'💪':'🌙';
+  const name=(profile&&profile.name)?' '+esc(profile.name):'';
+  const dayNum=Math.floor(Date.now()/864e5);
+  const msg=GREET_MSGS[dayNum%GREET_MSGS.length];
+  const streak=streakDays();
+  const doneWeek=state.tasks.filter(t=>t.done).concat(state.archive||[]).filter(t=>(t.doneAt||0)>=mondayOf(Date.now()).getTime()).length;
+  const open=state.tasks.filter(t=>!t.done);
+  const todayN=open.filter(t=>t.today||t.plan===todayStr()).length;
+  el.innerHTML=`<div class="greet">
+    <div class="greet-hi">${hi}${name} ${emo}</div>
+    <div class="greet-msg">${msg}</div>
+    <div class="greet-meta">
+      ${streak>=2?`<span class="greet-pill fire">🔥 ${streak} jours d'affilée</span>`:''}
+      ${doneWeek>0?`<span class="greet-pill">✅ ${doneWeek} cette semaine</span>`:''}
+      ${todayN>0?`<span class="greet-pill">🎯 ${todayN} au programme</span>`:''}
+    </div>
+  </div>`;
+  maybeCelebrate();
+}
+function maybeCelebrate(){
+  try{
+    const k='planif.lastCelebrate',t=todayStr();
+    if(localStorage.getItem(k)===t)return;
+    localStorage.setItem(k,t);
+    if(!window.matchMedia||!matchMedia('(prefers-reduced-motion: reduce)').matches)confetti();
+  }catch(e){}
+}
+function confetti(){
+  let c=document.getElementById('confetti');
+  if(!c){c=document.createElement('canvas');c.id='confetti';document.body.appendChild(c)}
+  const ctx=c.getContext('2d');c.width=innerWidth;c.height=innerHeight;
+  const cols=['#7c6cff','#22d3ee','#34d399','#fbbf24','#fb7185'];
+  const N=90,parts=[];
+  for(let i=0;i<N;i++)parts.push({x:innerWidth/2+(Math.random()-.5)*120,y:innerHeight*.28,vx:(Math.random()-.5)*9,vy:Math.random()*-11-4,g:.32+Math.random()*.15,s:5+Math.random()*6,c:cols[i%cols.length],r:Math.random()*6,vr:(Math.random()-.5)*.4,life:0});
+  let frame=0;
+  (function loop(){
+    frame++;ctx.clearRect(0,0,c.width,c.height);let alive=false;
+    parts.forEach(p=>{p.vy+=p.g;p.x+=p.vx;p.y+=p.vy;p.r+=p.vr;
+      if(p.y<c.height+20){alive=true;ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);ctx.fillStyle=p.c;ctx.globalAlpha=Math.max(0,1-frame/120);ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s*.6);ctx.restore()}});
+    if(alive&&frame<130)requestAnimationFrame(loop);else{ctx.clearRect(0,0,c.width,c.height)}
+  })();
+}
 /* ===== Planificateur de jour (depuis la vue Semaine) ===== */
 let planDs=null,planCap=360,planSel=new Set(),planCommits=[],planCapManual=false,planShowOther=false;
 function planBusyMin(){return planCommits.reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)+Math.round(gcalBusyMin(planDs))}
@@ -1599,7 +1732,7 @@ function renderDayCommits(){
   </div>`).join('');
 }
 function addCommit(){planCommits.push({id:uid(),date:planDs,label:'',s:'09:00',e:'10:00'});autoSuggestPlanCap();renderDayCommits();renderDayTasks()}
-function renderPlanCap(){document.querySelectorAll('#dayCapSeg button').forEach(b=>b.classList.toggle('on',+b.dataset.v===planCap))}
+function renderPlanCap(){document.getElementById('dayCapSeg').innerHTML=capSegHTML(dayFullMin(planDs),planCap,'setPlanCap')}
 function setPlanCap(v){planCap=v;planCapManual=true;renderPlanCap();renderDayTasks()}
 function renderDayRdv(){
   const el=document.getElementById('dayRdv');
@@ -1630,9 +1763,11 @@ function renderDayTasks(){
   }
   document.getElementById('dayTaskList').innerHTML=html;
   const tot=state.tasks.filter(t=>planSel.has(t.id)).reduce((s,t)=>s+t.est,0);
-  const over=tot>planCap;
+  const reserve=dayReserve();
+  const budget=Math.max(0,planCap-reserve);
+  const over=tot>budget;
   const mtg=planCommits.reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)+Math.round(gcalBusyMin(planDs));
-  document.getElementById('dayTotal').innerHTML=`<span><b>${planSel.size}</b> tâche(s) · <b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(planCap)} de travail</span>${mtg>0?`<span>·</span><span>📅 <b>${fmtMin(mtg)}</b> de réunion</span>`:''}<span style="margin-left:auto;color:${over?'var(--warn)':'var(--ok)'}">${over?'⚠️ trop chargé':'✓ tenable'}</span>`;
+  document.getElementById('dayTotal').innerHTML=`<span><b>${planSel.size}</b> tâche(s) · <b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(budget)} pour les tâches</span>${reserve>0?`<span>·</span><span>📥 ${fmtMin(reserve)} divers</span>`:''}${mtg>0?`<span>·</span><span>📅 ${fmtMin(mtg)} réunion</span>`:''}<span style="margin-left:auto;color:${over?'var(--warn)':'var(--ok)'}">${over?'⚠️ trop chargé':'✓ tenable'}</span>`;
 }
 function togglePlanSel(id){planSel.has(id)?planSel.delete(id):planSel.add(id);renderDayTasks()}
 function saveDayPlan(){
@@ -1685,10 +1820,10 @@ function renderCockpit(){
       ...due.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">⏰ ${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`),
       ...planned.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`)
     ];
-    const capBadge=cap===0?'🌙 repos':cap<360?(cap>=180?'🕐 partielle':'🔋 légère'):'';
+    const capBadge=cap===0?'🌙 repos':(capLabelDs(ds,cap)?(capLabelDs(ds,cap)==='légère'?'🔋 légère':'🕐 partielle'):'');
     days.push(`<div class="ck-day ${i===0?'todayd':''} ${rest?'restday':''}" onclick="openDayPlan('${ds}')" role="button" tabindex="0" title="Planifier ce jour">
       <div class="ck-date"><span>${i===0?'Aujourd\'hui':cap1(d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}))}${capBadge?' · '+capBadge:''}</span>
-      ${!rest&&load>0?`<span class="ck-load">${over?'🔴':load>=cap*0.7?'🟠':'🟢'} ~${fmtMin(Math.round(load))}${cap<360?' / '+fmtMin(cap):''}</span>`:'<span class="ck-load" style="color:var(--faint)">✎ planifier</span>'}</div>
+      ${!rest&&load>0?`<span class="ck-load">${over?'🔴':load>=cap*0.7?'🟠':'🟢'} ~${fmtMin(Math.round(load))} / ${fmtMin(cap)}</span>`:'<span class="ck-load" style="color:var(--faint)">✎ planifier</span>'}</div>
       ${rest?'<div class="ck-empty">🏖️ Journée de repos</div>':(items.length?items.join(''):'<div class="ck-empty">Rien de planifié — touche pour organiser</div>')}
     </div>`);
   }
