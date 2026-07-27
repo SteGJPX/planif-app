@@ -12,7 +12,7 @@
   --bg:#0b0e1a; --bg2:#101527;
   --card:rgba(255,255,255,.045); --card-h:rgba(255,255,255,.07);
   --border:rgba(255,255,255,.09); --border-h:rgba(255,255,255,.18);
-  --txt:#eef1fa; --muted:#8b93ad; --faint:#5a627e;
+  --txt:#eef1fa; --muted:#9aa2bd; --faint:#767e99;
   --accent:#7c6cff; --accent2:#22d3ee; --ok:#34d399; --warn:#fbbf24; --hot:#fb7185;
   --grad:linear-gradient(135deg,#7c6cff,#22d3ee);
   --r:16px; --shadow:0 10px 40px rgba(0,0,0,.35);
@@ -28,6 +28,8 @@ body{
   background-attachment:fixed;
 }
 button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent2);outline-offset:2px;border-radius:6px}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 input,select,textarea{font-family:inherit;font-size:1rem;color:var(--txt);background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:12px;padding:.65rem .8rem;outline:none;transition:border-color .2s}
 input:focus,select:focus,textarea:focus{border-color:var(--accent)}
 select option{background:var(--bg2);color:var(--txt)}
@@ -250,8 +252,8 @@ section.view.active{display:block}
       <h1 class="date" id="dateTitle"></h1>
     </div>
     <div class="head-actions">
-      <button class="icon-btn mic-btn" onclick="startVoice()" title="Ajouter une tâche à la voix">🎤</button>
-      <button class="icon-btn" id="btnMenu" title="Sauvegarde & export">⚙️</button>
+      <button class="icon-btn mic-btn" onclick="startVoice()" title="Ajouter une tâche à la voix" aria-label="Ajouter une tâche à la voix">🎤</button>
+      <button class="icon-btn" id="btnMenu" title="Sauvegarde & réglages" aria-label="Sauvegarde et réglages">⚙️</button>
     </div>
   </header>
 
@@ -385,6 +387,9 @@ section.view.active{display:block}
     </div>
     <input type="file" id="importFile" accept=".json" style="display:none">
     <p class="hint" style="margin-top:1rem">💡 Le fichier .ics s'importe dans Google Agenda (Paramètres → Importer) : chaque tâche avec une échéance devient un événement.</p>
+    <div class="section-title">↩︎ Historique & récupération</div>
+    <p class="hint" style="margin-bottom:.6rem">Une copie de tes données est gardée automatiquement avant chaque opération sensible. En cas de problème, restaure-la en un tap — rien n'est jamais perdu.</p>
+    <div class="task-list" id="backupList"></div>
   </div>
 </div>
 
@@ -467,7 +472,8 @@ const TEMPLATES={
 };
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
-function todayStr(){return new Date().toISOString().slice(0,10)}
+function localDS(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
+function todayStr(){return localDS(new Date())}
 
 function defaultState(){
   const P=(n,c)=>({id:uid(),name:n,color:c});
@@ -489,11 +495,69 @@ function defaultState(){
   };
 }
 
+/* Normalisation défensive : garantit que d'anciennes données (schéma incomplet)
+   ne feront jamais planter render(). Ne supprime aucune valeur existante. */
+function migrate(s){
+  if(!s||typeof s!=='object'||!Array.isArray(s.tasks))return null;
+  s.projects=(Array.isArray(s.projects)&&s.projects.length)?s.projects:defaultState().projects;
+  s.log=Array.isArray(s.log)?s.log:[];
+  s.archive=Array.isArray(s.archive)?s.archive:[];
+  const D={notes:'',deadline:null,today:false,done:false,doneAt:null,spent:0,timerStart:null,timerRate:1,est:30,impact:2,urgency:2,complexity:1,subtasks:[],subsOpen:false,createdAt:0};
+  s.tasks.forEach(t=>{
+    if(!t||typeof t!=='object')return;
+    for(const k in D)if(t[k]===undefined)t[k]=D[k];
+    if(!Array.isArray(t.subtasks))t.subtasks=[];
+    if(typeof t.notes!=='string')t.notes='';
+    if(!t.id)t.id=uid();
+    if(!s.projects.some(p=>p.id===t.projectId))t.projectId=s.projects[0].id;
+  });
+  s.tasks=s.tasks.filter(t=>t&&typeof t==='object'&&t.title);
+  return s;
+}
 function load(){
-  try{const raw=localStorage.getItem(LS_KEY); if(raw){state=JSON.parse(raw);return}}catch(e){}
+  let raw=null;
+  try{raw=localStorage.getItem(LS_KEY)}catch(e){}
+  if(raw){
+    try{const parsed=migrate(JSON.parse(raw)); if(parsed){state=parsed;return}}catch(e){}
+    /* données illisibles : on ne les écrase PAS, on les met de côté pour récupération */
+    try{localStorage.setItem(LS_KEY+'.corrupt.'+Date.now(),raw)}catch(e){}
+  }
   state=defaultState(); save();
 }
-function save(){state.updatedAt=Date.now();localStorage.setItem(LS_KEY,JSON.stringify(state));if(typeof schedulePush==='function')schedulePush()}
+function save(){
+  state.updatedAt=Date.now();
+  saveLocal();
+  if(typeof schedulePush==='function')schedulePush();
+}
+/* écriture locale seule : ne change pas updatedAt et ne déclenche pas d'envoi cloud
+   (pour les nettoyages dérivés type mode repos/capacité périmés) */
+function saveLocal(){
+  try{localStorage.setItem(LS_KEY,JSON.stringify(state))}
+  catch(e){if(typeof toast==='function')toast('⚠️ Sauvegarde locale impossible (espace saturé) — exporte tes données en secours')}
+}
+/* ===== Sauvegardes automatiques locales (filet de sécurité anti-perte) ===== */
+const BK_KEY='planif.backups';
+function snapshot(reason){
+  try{
+    const arr=JSON.parse(localStorage.getItem(BK_KEY)||'[]');
+    arr.unshift({ts:Date.now(),reason:reason||'',n:(state.tasks||[]).length,data:JSON.stringify(state)});
+    while(arr.length>8)arr.pop();
+    localStorage.setItem(BK_KEY,JSON.stringify(arr));
+  }catch(e){}
+}
+function listBackups(){try{return JSON.parse(localStorage.getItem(BK_KEY)||'[]')}catch(e){return[]}}
+function restoreBackup(i){
+  const b=listBackups()[i];if(!b)return;
+  if(!confirm('Restaurer la version du '+new Date(b.ts).toLocaleString('fr-FR')+' ('+b.n+' tâche(s)) ?\n\nLa version actuelle sera d\'abord sauvegardée automatiquement, donc rien n\'est perdu.'))return;
+  snapshot('avant restauration');
+  try{const d=migrate(JSON.parse(b.data));if(!d)throw 0;state=d;save();render();renderBackups();toast('↩︎ Version restaurée ('+d.tasks.length+' tâches)');}
+  catch(e){toast('⚠️ Restauration impossible')}
+}
+function renderBackups(){
+  const el=document.getElementById('backupList');if(!el)return;
+  const arr=listBackups();
+  el.innerHTML=arr.length?arr.map((b,i)=>`<div class="rowt"><span class="rt" style="cursor:default">${new Date(b.ts).toLocaleString('fr-FR',{weekday:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} · ${b.n} tâche(s)<br><span style="color:var(--faint);font-size:.72rem">${esc(b.reason||'')}</span></span><button class="t-btn" title="Restaurer cette version" onclick="restoreBackup(${i})">↩︎</button></div>`).join(''):'<p class="hint">Aucune sauvegarde automatique pour l\'instant. Une copie se crée avant chaque opération sensible (import, clôture, restauration cloud).</p>';
+}
 
 /* ================= SCORE & TRI ================= */
 function taskSort(a,b){
@@ -545,6 +609,8 @@ function fmtMs(ms){const m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000);if(m
 function spentNow(t){return t.spent+(t.timerStart?(Date.now()-t.timerStart)*(t.timerRate||1):0)}
 function liveExtra(){return runningTasks().reduce((s,t)=>s+(Date.now()-t.timerStart)*(t.timerRate||1),0)}
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function col(c){return /^#[0-9a-fA-F]{3,8}$|^rgb\(|^var\(--/.test(c||'')?c:'var(--accent2)'}
+function cap1(s){s=(s||'').trim();return s?s[0].toUpperCase()+s.slice(1):''}
 function toast(msg){const el=document.getElementById('toast');el.innerHTML=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3200)}
 
 /* ================= TIMER (jusqu'à 2 tâches de front, temps partagé) ================= */
@@ -704,6 +770,7 @@ function renderEodTomorrow(){
 }
 function toggleEodSel(id){eodSel.has(id)?eodSel.delete(id):eodSel.add(id);renderEodTomorrow()}
 function closeDay(){
+  snapshot('clôture de journée');
   const done=state.tasks.filter(t=>t.done);
   state.archive=(state.archive||[]).concat(done.map(t=>({title:t.title,projectId:t.projectId,est:t.est,spent:t.spent,doneAt:t.doneAt||Date.now()})));
   state.tasks=state.tasks.filter(t=>!t.done);
@@ -734,8 +801,8 @@ function render(){
   document.getElementById('cntTasks').textContent=open.length;
 
   /* --- nettoyage des plans périmés --- */
-  if(state.nextWorkDay&&state.nextWorkDay<=todayStr()){state.nextWorkDay=null;save()}
-  if(state.dayCapacity&&state.dayCapacity.date<todayStr()){state.dayCapacity=null;save()}
+  if(state.nextWorkDay&&state.nextWorkDay<=todayStr()){state.nextWorkDay=null;saveLocal()}
+  if(state.dayCapacity&&state.dayCapacity.date<todayStr()){state.dayCapacity=null;saveLocal()}
   const cap=todayCapacity();
 
   /* --- héro : la tâche à attaquer maintenant (ou en cours, ou repos) --- */
@@ -1070,9 +1137,11 @@ function exportJSON(){
 document.getElementById('importFile').addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);
-    if(!d.tasks||!d.projects)throw 0;
-    state=d;save();render();toast('📂 Données importées !');
+  r.onload=()=>{try{const d=migrate(JSON.parse(r.result));
+    if(!d)throw 0;
+    if(state.tasks.length&&!confirm('Importer '+d.tasks.length+' tâche(s) ?\nCela REMPLACE les '+state.tasks.length+' tâche(s) actuelles de cet appareil.\n(Une sauvegarde automatique est créée, donc c\'est réversible.)'))return;
+    snapshot('avant import');
+    state=d;save();render();toast('📂 Données importées ('+d.tasks.length+' tâches) !');
     document.getElementById('menuOverlay').classList.remove('open');
   }catch(err){toast('⚠️ Fichier invalide')}};
   r.readAsText(f);e.target.value='';
@@ -1097,9 +1166,11 @@ document.getElementById('btnMenu').addEventListener('click',()=>{
   document.getElementById('gcalClientId').value=gcal.clientId||'';
   document.getElementById('gcalIdGroup').style.display=GCAL_DEFAULT_CLIENT_ID?'none':'block';
   if(gcal.token&&Date.now()<gcal.exp)document.getElementById('gcalStatus').textContent='✅ Google Agenda connecté';
+  renderBackups();
   document.getElementById('menuOverlay').classList.add('open');
 });
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.overlay.open').forEach(o=>o.classList.remove('open'))}});
 
 /* ================= NAV ================= */
 document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('click',()=>{
@@ -1135,9 +1206,10 @@ async function pullCloud(manual){
     if(r.status===404){setSyncStatus('Aucune donnée cloud pour l\'instant — fais « ⬆️ Envoyer » depuis l\'appareil à jour.');return}
     if(!r.ok)throw new Error(errLabel(r.status));
     const j=await r.json();
-    const remote=JSON.parse(b64d((j.content||'').replace(/\n/g,'')));
-    if(!remote.tasks||!remote.projects)throw new Error('contenu invalide');
+    const remote=migrate(JSON.parse(b64d((j.content||'').replace(/\n/g,''))));
+    if(!remote)throw new Error('contenu invalide');
     if((remote.updatedAt||0)>(state.updatedAt||0)){
+      snapshot('avant récupération cloud');
       state=remote;localStorage.setItem(LS_KEY,JSON.stringify(state));render();
       setSyncStatus('✅ Récupéré (version du '+new Date(remote.updatedAt).toLocaleString('fr-FR')+')');
       if(manual)toast('⬇️ Données synchronisées depuis le cloud');
@@ -1145,6 +1217,7 @@ async function pullCloud(manual){
       /* la version locale semble plus récente : ne jamais écraser le cloud sans confirmation */
       const remoteN=(remote.tasks||[]).length,localN=state.tasks.length;
       if(confirm('Le cloud contient '+remoteN+' tâche(s) ('+new Date(remote.updatedAt).toLocaleString('fr-FR')+'), cet appareil en a '+localN+'.\n\nOK = RÉCUPÉRER la version du cloud (recommandé après une réinstallation)\nAnnuler = garder la version de cet appareil et l\'envoyer au cloud')){
+        snapshot('avant récupération cloud');
         state=remote;localStorage.setItem(LS_KEY,JSON.stringify(state));render();
         toast('⬇️ Version cloud restaurée ('+remoteN+' tâches)');setSyncStatus('✅ Version cloud restaurée');
       }else{pushCloud(true)}
@@ -1160,7 +1233,17 @@ async function pushCloud(manual){
     setSyncStatus('⏳ Envoi…');
     let sha=null;
     const g=await fetch(ghUrl(),{headers:ghHeaders()});
-    if(g.ok)sha=(await g.json()).sha;
+    if(g.ok){
+      const gj=await g.json();sha=gj.sha;
+      /* garde-fou : ne jamais écraser une version cloud PLUS RÉCENTE que celle de cet appareil */
+      try{
+        const remote=JSON.parse(b64d((gj.content||'').replace(/\n/g,'')));
+        if(remote&&(remote.updatedAt||0)>(state.updatedAt||0)){
+          if(!manual){setSyncStatus('↩︎ Cloud plus récent — récupération à la place');return pullCloud(false)}
+          if(!confirm('Le cloud a une version PLUS RÉCENTE ('+new Date(remote.updatedAt).toLocaleString('fr-FR')+') que cet appareil.\n\nOK = écraser quand même avec cet appareil\nAnnuler = récupérer la version du cloud (recommandé)')){return pullCloud(true)}
+        }
+      }catch(e){}
+    }
     else if(g.status!==404)throw new Error(errLabel(g.status));
     const body={message:'Planif sync',content:b64e(JSON.stringify(state))};
     if(sha)body.sha=sha;
@@ -1225,7 +1308,6 @@ async function loadGcalEvents(){
     renderAgenda();render();
   }catch(e){}
 }
-function localDS(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
 function eventsForDay(ds){
   if(!gcalEvents)return[];
   return gcalEvents.filter(e=>{
@@ -1254,7 +1336,7 @@ function renderAgenda(){
       const allDay=!e.start.dateTime;
       const s=allDay?null:new Date(e.start.dateTime),f=allDay?null:new Date(e.end.dateTime);
       const past=f&&f.getTime()<now;
-      return `<div class="rowt" style="${past?'opacity:.4':''}"><span class="pdot" style="background:${e._color||'var(--accent2)'}" title="${esc(e._cal||'')}"></span><span class="re" style="min-width:5.2rem">${allDay?'Journée':hh(s)+'–'+hh(f)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(sans titre)')}</span></div>`;
+      return `<div class="rowt" style="${past?'opacity:.4':''}"><span class="pdot" style="background:${col(e._color)}" title="${esc(e._cal||'')}"></span><span class="re" style="min-width:5.2rem">${allDay?'Journée':hh(s)+'–'+hh(f)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(sans titre)')}</span></div>`;
     }).join('')+'</div>';
 }
 
@@ -1288,8 +1370,7 @@ async function loadMail(){
         const nn=normTxt(' '+subject+' '+snippet+' ');
         const actionable=/peux[- ]tu|pourrais[- ]tu|pouvez[- ]vous|merci de|merci d.|il faut|faudrait|envoie|envoyer|besoin de|avant le|urgent|deadline|rappel|relance|valider|confirmer|\?/.test(nn);
         if(!actionable)return null;
-        let deadline=null;const dm=nn.match(/\b([0-3]?\d)\/([01]?\d)(?:\/(\d{2,4}))?\b/);
-        if(dm){const y=dm[3]?(+dm[3]<100?2000+ +dm[3]:+dm[3]):new Date().getFullYear();const d=new Date(y,+dm[2]-1,+dm[1]);if(d.getTime()>Date.now()-864e5)deadline=localDS(d)}
+        const deadline=detectDeadline(nn);
         return {id:m.id,from:from.replace(/<.*>/,'').replace(/"/g,'').trim(),subject,snippet,deadline};
       }catch(e){return null}
     }));
@@ -1308,8 +1389,8 @@ function markMail(id,action){
 }
 function acceptMail(id){
   const s=(mailSug||[]).find(x=>x.id===id);if(!s)return;
-  const title=s.subject.replace(/^((re|tr|fwd?)\s*:\s*)+/i,'').trim().slice(0,90);
-  state.tasks.push({id:uid(),title:title[0].toUpperCase()+title.slice(1),
+  const title=cap1(s.subject.replace(/^((re|tr|fwd?)\s*:\s*)+/i,'').slice(0,90))||'Tâche depuis un mail';
+  state.tasks.push({id:uid(),title,
     notes:'✉️ De '+s.from+'\n'+s.snippet,projectId:state.projects[0].id,
     est:30,impact:2,urgency:s.deadline?3:2,complexity:1,deadline:s.deadline,
     today:!!s.deadline,done:false,doneAt:null,spent:0,timerStart:null,subtasks:[],createdAt:Date.now(),subsOpen:false});
@@ -1396,7 +1477,7 @@ function renderCockpit(){
       +evs.reduce((s,e)=>e.start.dateTime?s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000:s,0);
     const hh=x=>new Date(x).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const items=[
-      ...evs.map(e=>`<div class="ck-item ev"><span class="pdot" style="background:${e._color||'var(--accent2)'}"></span><span class="hr">${e.start.dateTime?hh(e.start.dateTime):'📅'}</span><span class="lbl">${esc(e.summary||'(RDV)')}</span></div>`),
+      ...evs.map(e=>`<div class="ck-item ev"><span class="pdot" style="background:${col(e._color)}"></span><span class="hr">${e.start.dateTime?hh(e.start.dateTime):'📅'}</span><span class="lbl">${esc(e.summary||'(RDV)')}</span></div>`),
       ...due.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">⏰ ${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`),
       ...planned.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`)
     ];
@@ -1428,19 +1509,15 @@ function mailToTask(){
   let title=(lines.find(l=>/^(objet|subject|re\s*:|tr\s*:)/i.test(l))||'').replace(/^(objet|subject)\s*:\s*/i,'').replace(/^(re|tr)\s*:\s*/i,'').trim()||lines[0]||'';
   if(title.length>90)title=title.slice(0,90)+'…';
   const n=normTxt(' '+raw+' ');
-  let deadline=null;
-  const dm=n.match(/\b([0-3]?\d)\/([01]?\d)(?:\/(\d{2,4}))?\b/);
-  if(dm){
-    const y=dm[3]?(+dm[3]<100?2000+ +dm[3]:+dm[3]):new Date().getFullYear();
-    const d=new Date(y,+dm[2]-1,+dm[1]);
-    if(d.getTime()>Date.now()-864e5)deadline=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
-  }
+  let deadline=detectDeadline(n);
   if(!deadline){
-    if(/apres[- ]demain/.test(n)){const x=new Date();x.setDate(x.getDate()+2);deadline=x.toISOString().slice(0,10)}
-    else if(/\bdemain\b/.test(n)){const x=new Date();x.setDate(x.getDate()+1);deadline=x.toISOString().slice(0,10)}
+    if(/apres[- ]demain/.test(n)){const x=new Date();x.setDate(x.getDate()+2);deadline=localDS(x)}
+    else if(/\bdemain\b/.test(n)){const x=new Date();x.setDate(x.getDate()+1);deadline=localDS(x)}
   }
+  title=cap1(title);
+  if(!title){toast('⚠️ Aucun objet exploitable — ajoute au moins une ligne de titre');return}
   const urgent=/urgent|des que possible|asap|au plus vite|tres rapidement/.test(n);
-  const t={id:uid(),title:title[0].toUpperCase()+title.slice(1),
+  const t={id:uid(),title,
     notes:'✉️ Mail :\n'+raw.slice(0,800),projectId:state.projects[0].id,
     est:30,impact:2,urgency:urgent?3:2,complexity:1,deadline,
     today:urgent,done:false,doneAt:null,spent:0,timerStart:null,subtasks:[],createdAt:Date.now(),subsOpen:false};
@@ -1455,6 +1532,22 @@ function mailToTask(){
 /* ================= VOIX ================= */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 function normTxt(s){return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
+/* détecte une échéance jj/mm dans un texte normalisé, en évitant les faux positifs
+   (« ouvert 24/7 », « 1/2 ») : exige une année OU un mot de contexte proche */
+function detectDeadline(nn){
+  const rx=/([0-3]?\d)\/([01]?\d)(?:\/(\d{2,4}))?/g;let m;
+  while((m=rx.exec(nn))){
+    const day=+m[1],mon=+m[2],hasYear=!!m[3];
+    if(day<1||day>31||mon<1||mon>12)continue;
+    const ctx=nn.slice(Math.max(0,m.index-16),m.index);
+    const kw=/(avant|d.ici|pour|\ble\b|echeance|deadline|delai|livr|rend|remett|jusqu|au plus tard|dernier delai)/.test(ctx);
+    if(!hasYear&&!kw)continue;
+    const y=hasYear?(+m[3]<100?2000+ +m[3]:+m[3]):new Date().getFullYear();
+    const d=new Date(y,mon-1,day);
+    if(d.getTime()>Date.now()-864e5)return localDS(d);
+  }
+  return null;
+}
 let recActive=null;
 function startVoice(){
   if(!SR){toast('⚠️ Dictée non supportée par ce navigateur — utilise Chrome (ou Safari récent)');return}
