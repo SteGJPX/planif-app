@@ -379,6 +379,9 @@ section.view.active{display:block}
     <button class="btn ghost" style="width:100%" onclick="gcalConnect(true)">📅 Connecter mon compte Google</button>
     <p class="hint" id="gcalStatus" style="margin:.5rem 0 .3rem">Affiche tes rendez-vous du jour dans le dashboard et calcule ton temps réellement disponible. Lecture seule, connexion directe navigateur → Google (aucun serveur tiers).</p>
     <p class="hint" id="mailStatus" style="margin:0 0 1rem"></p>
+    <div class="section-title">☕ Bien-être & performance</div>
+    <p class="hint" style="margin-bottom:.5rem">Rester concentré, c'est bien ; couper au bon moment, c'est mieux. L'app te suggère une micro-pause après une longue session de focus.</p>
+    <div id="wellbeingBox" style="margin-bottom:1rem"></div>
     <div class="section-title">💾 Sauvegarde manuelle</div>
     <p class="hint" style="margin-bottom:1rem">Tes données restent sur cet appareil (aucun serveur). L'export JSON sert de sauvegarde ou de transfert manuel.</p>
     <div style="display:flex;flex-direction:column;gap:.6rem">
@@ -451,6 +454,11 @@ section.view.active{display:block}
       </div>
     </div>
     <div id="dayRdv"></div>
+    <div class="f-group">
+      <label>Réunions & indispos <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--faint)">(compte dans ta charge)</span></label>
+      <div id="dayCommits"></div>
+      <button class="btn ghost" style="font-size:.82rem;padding:.45rem .8rem" onclick="addCommit()">＋ Réunion / RDV / trajet</button>
+    </div>
     <div class="f-group" id="dayTasksGroup"><label>Tâches prévues ce jour-là</label>
       <div class="task-list" id="dayTaskList"></div>
     </div>
@@ -526,6 +534,7 @@ function migrate(s){
   s.log=Array.isArray(s.log)?s.log:[];
   s.archive=Array.isArray(s.archive)?s.archive:[];
   if(!s.days||typeof s.days!=='object'||Array.isArray(s.days))s.days={};
+  if(!Array.isArray(s.commitments))s.commitments=[];
   const D={notes:'',deadline:null,today:false,done:false,doneAt:null,spent:0,timerStart:null,timerRate:1,est:30,impact:2,urgency:2,complexity:1,subtasks:[],subsOpen:false,createdAt:0};
   s.tasks.forEach(t=>{
     if(!t||typeof t!=='object')return;
@@ -678,9 +687,19 @@ function logTime(projectId,ms){
   const e=state.log.find(l=>l.date===d&&l.projectId===projectId);
   if(e)e.ms+=ms; else state.log.push({date:d,projectId,ms});
 }
+let focusStart=null,lastNudge=0;
 function tick(){
   const run=runningTasks();
-  if(!run.length){document.title='Planif — Mon assistant de journée';return}
+  if(!run.length){document.title='Planif — Mon assistant de journée';focusStart=null;lastNudge=0;return}
+  /* bien-être : suggérer une pause après une longue session de focus continu */
+  if(!focusStart)focusStart=Date.now();
+  if(wellbeing.breaks){
+    const mins=(Date.now()-focusStart)/60000;
+    if(mins>=wellbeing.interval&&Date.now()-lastNudge>=wellbeing.interval*60000){
+      lastNudge=Date.now();
+      toast('☕ '+Math.round(mins)+' min de focus d\'affilée — accorde-toi 2-3 min de pause, tu repartiras plus net et plus motivé 💪');
+    }
+  }
   run.forEach(t=>{
     document.querySelectorAll('[data-tt="'+t.id+'"]').forEach(el=>{el.textContent='⏱ '+fmtMs(spentNow(t))+' / '+fmtMin(t.est)});
     document.querySelectorAll('[data-tb="'+t.id+'"]').forEach(bar=>{const pct=Math.min(100,spentNow(t)/(t.est*60000)*100);bar.style.width=pct+'%';bar.classList.toggle('over',spentNow(t)>t.est*60000)});
@@ -734,11 +753,9 @@ function renderEodDays(){
   }).join('');
 }
 function suggestCap(){
-  /* si l'agenda montre des RDV ce jour-là, propose une capacité réduite */
+  /* propose une capacité réduite d'après les réunions (agenda + engagements saisis) */
   const d=new Date();d.setDate(d.getDate()+eodDayOffset);
-  const evs=eventsForDay(localDS(d)).filter(e=>e.start&&e.start.dateTime);
-  const busyMin=evs.reduce((s,e)=>s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000,0);
-  if(busyMin>=180)eodCap=90; else if(busyMin>=60)eodCap=180; else eodCap=360;
+  eodCap=suggestCapFor(localDS(d));
   renderEodCap();
 }
 function renderEodCap(){
@@ -837,6 +854,13 @@ function plannedFor(ds){
   return state.tasks.filter(t=>!t.done&&(t.plan===ds||(isToday&&t.today)));
 }
 function shortDay(ds){return new Date(ds+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'})}
+/* ===== Engagements (réunions / RDV / indispos saisis à la main) ===== */
+function hm2min(hm){const p=(hm||'').split(':');return (+p[0]||0)*60+(+p[1]||0)}
+function commitmentsFor(ds){return (state.commitments||[]).filter(c=>c.date===ds).sort((a,b)=>hm2min(a.s)-hm2min(b.s))}
+function commitBusyMin(ds){return commitmentsFor(ds).reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)}
+function gcalBusyMin(ds){return eventsForDay(ds).reduce((s,e)=>e.start&&e.start.dateTime?s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000:s,0)}
+function dayBusyMin(ds){return commitBusyMin(ds)+gcalBusyMin(ds)}
+function suggestCapFor(ds){const busy=dayBusyMin(ds);return busy>=240?90:busy>=90?180:360}
 function todayCapacity(){
   const c=dayCap(todayStr());
   return (c>0&&c<360)?c:null;
@@ -1232,7 +1256,7 @@ document.getElementById('btnMenu').addEventListener('click',()=>{
   document.getElementById('gcalClientId').value=gcal.clientId||'';
   document.getElementById('gcalIdGroup').style.display=GCAL_DEFAULT_CLIENT_ID?'none':'block';
   if(gcal.token&&Date.now()<gcal.exp)document.getElementById('gcalStatus').textContent='✅ Google Agenda connecté';
-  renderBackups();
+  renderWellbeing();renderBackups();
   document.getElementById('menuOverlay').classList.add('open');
 });
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('open')}));
@@ -1248,6 +1272,20 @@ document.querySelectorAll('nav.tabs button').forEach(b=>b.addEventListener('clic
 }));
 
 /* ================= SYNC CLOUD (GitHub privé) ================= */
+let wellbeing=JSON.parse(localStorage.getItem('planif.wellbeing')||'null')||{breaks:true,interval:50};
+function saveWellbeing(){localStorage.setItem('planif.wellbeing',JSON.stringify(wellbeing))}
+function toggleBreaks(){wellbeing.breaks=!wellbeing.breaks;saveWellbeing();renderWellbeing();toast(wellbeing.breaks?'☕ Rappels de pause activés':'Rappels de pause désactivés')}
+function setBreakInterval(v){wellbeing.interval=+v;saveWellbeing();renderWellbeing()}
+function renderWellbeing(){
+  const el=document.getElementById('wellbeingBox');if(!el)return;
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:.6rem;flex-wrap:wrap">
+    <button class="btn ghost" style="flex:1;min-width:9rem" onclick="toggleBreaks()">${wellbeing.breaks?'✅ Pauses activées':'⬜ Pauses désactivées'}</button>
+    ${wellbeing.breaks?`<select onchange="setBreakInterval(this.value)" style="width:auto">
+      <option value="25"${wellbeing.interval===25?' selected':''}>toutes les 25 min</option>
+      <option value="50"${wellbeing.interval===50?' selected':''}>toutes les 50 min</option>
+      <option value="90"${wellbeing.interval===90?' selected':''}>toutes les 90 min</option>
+    </select>`:''}</div>`;
+}
 const SYNC_KEY='planif.sync';
 let sync=JSON.parse(localStorage.getItem(SYNC_KEY)||'null')||{token:'',repo:''};
 let pushTimer=null,syncBusy=false;
@@ -1383,27 +1421,36 @@ function eventsForDay(ds){
   });
 }
 function busyRemaining(){
-  const now=Date.now();let b=0;
-  eventsForDay(todayStr()).forEach(e=>{
+  const now=Date.now(),ds=todayStr();let b=0;
+  eventsForDay(ds).forEach(e=>{
     if(!e.start.dateTime)return;
     const s=new Date(e.start.dateTime).getTime(),f=new Date(e.end.dateTime).getTime();
+    if(f>now)b+=f-Math.max(s,now);
+  });
+  commitmentsFor(ds).forEach(c=>{
+    const s=new Date(ds+'T'+c.s+':00').getTime(),f=new Date(ds+'T'+c.e+':00').getTime();
     if(f>now)b+=f-Math.max(s,now);
   });
   return b;
 }
 function renderAgenda(){
   const el=document.getElementById('agendaBox');if(!el)return;
-  const evs=eventsForDay(todayStr());
-  if(!evs.length){el.innerHTML='';return}
-  const now=Date.now();
-  const hh=d=>d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
-  el.innerHTML='<div class="section-title">📅 Rendez-vous du jour</div><div class="task-list">'
-    +evs.map(e=>{
-      const allDay=!e.start.dateTime;
-      const s=allDay?null:new Date(e.start.dateTime),f=allDay?null:new Date(e.end.dateTime);
-      const past=f&&f.getTime()<now;
-      return `<div class="rowt" style="${past?'opacity:.4':''}"><span class="pdot" style="background:${col(e._color)}" title="${esc(e._cal||'')}"></span><span class="re" style="min-width:5.2rem">${allDay?'Journée':hh(s)+'–'+hh(f)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(sans titre)')}</span></div>`;
-    }).join('')+'</div>';
+  const ds=todayStr();
+  const now=Date.now(),hh=d=>d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const rows=[];
+  eventsForDay(ds).forEach(e=>{
+    const allDay=!e.start.dateTime;
+    const s=allDay?null:new Date(e.start.dateTime),f=allDay?null:new Date(e.end.dateTime);
+    rows.push({sort:allDay?0:s.getTime(),past:f&&f.getTime()<now,color:col(e._color),time:allDay?'Journée':hh(s)+'–'+hh(f),label:e.summary||'(sans titre)'});
+  });
+  commitmentsFor(ds).forEach(c=>{
+    const end=new Date(ds+'T'+c.e+':00').getTime();
+    rows.push({sort:hm2min(c.s),past:end<now,color:'#fbbf24',time:c.s+'–'+c.e,label:'📌 '+(c.label||'Réunion')});
+  });
+  if(!rows.length){el.innerHTML='';return}
+  rows.sort((a,b)=>a.sort-b.sort);
+  el.innerHTML='<div class="section-title">📅 Rendez-vous & réunions du jour</div><div class="task-list">'
+    +rows.map(r=>`<div class="rowt" style="${r.past?'opacity:.4':''}"><span class="pdot" style="background:${r.color}"></span><span class="re" style="min-width:5.2rem">${r.time}</span><span class="rt" style="cursor:default">${esc(r.label)}</span></div>`).join('')+'</div>';
 }
 
 /* ================= SUGGESTIONS MAIL (lecture seule) ================= */
@@ -1523,17 +1570,35 @@ function shareWeek(){
 
 /* ================= VUE SEMAINE (cockpit) ================= */
 /* ===== Planificateur de jour (depuis la vue Semaine) ===== */
-let planDs=null,planCap=360,planSel=new Set();
+let planDs=null,planCap=360,planSel=new Set(),planCommits=[],planCapManual=false;
+function planBusyMin(){return planCommits.reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)+Math.round(gcalBusyMin(planDs))}
+function autoSuggestPlanCap(){if(planCapManual)return;const b=planBusyMin();const nv=b>=240?90:b>=90?180:360;if(nv!==planCap){planCap=nv;renderPlanCap()}}
 function openDayPlan(ds){
-  planDs=ds;planCap=dayCap(ds);
+  planDs=ds;
+  planCommits=commitmentsFor(ds).map(c=>({...c}));
   planSel=new Set(plannedFor(ds).map(t=>t.id));
+  /* capacité : celle déjà enregistrée (manuelle), sinon suggérée d'après réunions + agenda */
+  const stored=(state.days&&state.days[ds]!==undefined)?state.days[ds]:(state.dayCapacity&&state.dayCapacity.date===ds?state.dayCapacity.mins:undefined);
+  planCapManual=stored!==undefined;
+  planCap=stored!==undefined?stored:suggestCapFor(ds);
   const isToday=ds===todayStr();
   document.getElementById('dayTitle').textContent=isToday?'Aujourd\'hui':cap1(new Date(ds+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}));
-  renderPlanCap();renderDayRdv();renderDayTasks();
+  renderPlanCap();renderDayRdv();renderDayCommits();renderDayTasks();
   document.getElementById('dayOverlay').classList.add('open');
 }
+function renderDayCommits(){
+  const el=document.getElementById('dayCommits');if(!el)return;
+  el.innerHTML=planCommits.map((c,i)=>`<div class="sub-edit" style="flex-wrap:wrap;gap:.3rem;margin-bottom:.4rem">
+    <input value="${esc(c.label||'')}" placeholder="Réunion, RDV client, trajet…" oninput="planCommits[${i}].label=this.value" style="flex:1 1 100%">
+    <input type="time" value="${c.s||''}" oninput="planCommits[${i}].s=this.value;autoSuggestPlanCap();renderDayTasks()" style="flex:1">
+    <span style="align-self:center;color:var(--muted)">→</span>
+    <input type="time" value="${c.e||''}" oninput="planCommits[${i}].e=this.value;autoSuggestPlanCap();renderDayTasks()" style="flex:1">
+    <button class="rm t-btn" onclick="planCommits.splice(${i},1);autoSuggestPlanCap();renderDayCommits();renderDayTasks()" title="Retirer">✕</button>
+  </div>`).join('');
+}
+function addCommit(){planCommits.push({id:uid(),date:planDs,label:'',s:'09:00',e:'10:00'});autoSuggestPlanCap();renderDayCommits();renderDayTasks()}
 function renderPlanCap(){document.querySelectorAll('#dayCapSeg button').forEach(b=>b.classList.toggle('on',+b.dataset.v===planCap))}
-function setPlanCap(v){planCap=v;renderPlanCap();renderDayTasks()}
+function setPlanCap(v){planCap=v;planCapManual=true;renderPlanCap();renderDayTasks()}
 function renderDayRdv(){
   const el=document.getElementById('dayRdv');
   const evs=eventsForDay(planDs).filter(e=>e.start&&e.start.dateTime);
@@ -1559,12 +1624,16 @@ function renderDayTasks(){
   }).join(''):'<p class="hint">Aucune tâche en attente — ajoute-en depuis 📋 Tâches.</p>';
   const tot=state.tasks.filter(t=>planSel.has(t.id)).reduce((s,t)=>s+t.est,0);
   const over=tot>planCap;
-  document.getElementById('dayTotal').innerHTML=`<span><b>${planSel.size}</b> tâche(s)</span><span>·</span><span><b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(planCap)} dispo</span><span style="margin-left:auto;color:${over?'var(--warn)':'var(--ok)'}">${over?'⚠️ trop chargé':'✓ tenable'}</span>`;
+  const mtg=planCommits.reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)+Math.round(gcalBusyMin(planDs));
+  document.getElementById('dayTotal').innerHTML=`<span><b>${planSel.size}</b> tâche(s) · <b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(planCap)} de travail</span>${mtg>0?`<span>·</span><span>📅 <b>${fmtMin(mtg)}</b> de réunion</span>`:''}<span style="margin-left:auto;color:${over?'var(--warn)':'var(--ok)'}">${over?'⚠️ trop chargé':'✓ tenable'}</span>`;
 }
 function togglePlanSel(id){planSel.has(id)?planSel.delete(id):planSel.add(id);renderDayTasks()}
 function saveDayPlan(){
   snapshot('planification jour');
   setDayCap(planDs,planCap);
+  /* engagements : remplace ceux du jour par ceux édités (valides uniquement) */
+  state.commitments=(state.commitments||[]).filter(c=>c.date!==planDs)
+    .concat(planCommits.filter(c=>c.s&&c.e&&hm2min(c.e)>hm2min(c.s)).map(c=>({id:c.id||uid(),date:planDs,label:(c.label||'Réunion').slice(0,60),s:c.s,e:c.e})));
   const isToday=planDs===todayStr(),rest=planCap===0;
   state.tasks.forEach(t=>{
     if(t.done)return;
@@ -1598,12 +1667,14 @@ function renderCockpit(){
     const planned=plannedFor(ds).filter(t=>!due.includes(t));
     const rest=isRest(ds);
     const cap=dayCap(ds);
-    const evMin=evs.reduce((s,e)=>e.start.dateTime?s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000:s,0);
+    const commits=commitmentsFor(ds);
+    const evMin=gcalBusyMin(ds)+commitBusyMin(ds);
     const load=due.reduce((s,t)=>s+t.est,0)+planned.reduce((s,t)=>s+t.est,0)+evMin;
     const over=cap>0&&load>cap;
     const hh=x=>new Date(x).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const items=[
       ...evs.map(e=>`<div class="ck-item ev"><span class="pdot" style="background:${col(e._color)}"></span><span class="hr">${e.start.dateTime?hh(e.start.dateTime):'📅'}</span><span class="lbl">${esc(e.summary||'(RDV)')}</span></div>`),
+      ...commits.map(c=>`<div class="ck-item ev"><span class="pdot" style="background:#fbbf24"></span><span class="hr">${c.s}</span><span class="lbl">📌 ${esc(c.label||'Réunion')}</span></div>`),
       ...due.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">⏰ ${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`),
       ...planned.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`)
     ];
