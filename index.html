@@ -105,8 +105,10 @@ section.view.active{display:block}
 .updown button:hover{color:var(--txt);background:var(--card-h)}
 .done-strip{margin-top:1.1rem;text-align:center;font-size:.82rem;color:var(--muted)}
 /* ---------- Vue Semaine ---------- */
-.ck-day{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:.7rem .85rem;margin-bottom:.5rem;animation:fadeUp .35s ease both}
+.ck-day{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:.7rem .85rem;margin-bottom:.5rem;animation:fadeUp .35s ease both;cursor:pointer;transition:border-color .2s,background .2s}
+.ck-day:hover{border-color:var(--border-h);background:var(--card-h)}
 .ck-day.todayd{border-color:rgba(124,108,255,.5);background:rgba(124,108,255,.06)}
+.ck-day.restday{opacity:.6}
 .ck-date{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;font-weight:700;text-transform:capitalize;margin-bottom:.3rem}
 .ck-date .ck-load{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums;font-size:.75rem}
 .ck-item{display:flex;gap:.5rem;align-items:center;font-size:.82rem;color:var(--muted);padding:.14rem 0;min-width:0}
@@ -436,6 +438,27 @@ section.view.active{display:block}
   </div>
 </div>
 
+<!-- ===== MODAL PLANIFIER UN JOUR ===== -->
+<div class="overlay" id="dayOverlay">
+  <div class="modal">
+    <h2><span id="dayTitle">Planifier</span><button class="close-x" aria-label="Fermer" onclick="document.getElementById('dayOverlay').classList.remove('open')">✕</button></h2>
+    <div class="f-group"><label>Ma disponibilité ce jour-là</label>
+      <div class="seg" id="dayCapSeg">
+        <button data-v="360" onclick="setPlanCap(360)">💪 Pleine<br><small>~6h</small></button>
+        <button data-v="180" onclick="setPlanCap(180)">🕐 Partielle<br><small>~3h</small></button>
+        <button data-v="90" onclick="setPlanCap(90)">🔋 Légère<br><small>~1h30</small></button>
+        <button data-v="0" onclick="setPlanCap(0)">🌙 Repos<br><small>—</small></button>
+      </div>
+    </div>
+    <div id="dayRdv"></div>
+    <div class="f-group" id="dayTasksGroup"><label>Tâches prévues ce jour-là</label>
+      <div class="task-list" id="dayTaskList"></div>
+    </div>
+    <div class="strip" id="dayTotal" style="margin-top:.4rem;margin-bottom:0"></div>
+    <div class="modal-actions"><button class="btn primary" onclick="saveDayPlan()">Enregistrer</button></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 
@@ -502,6 +525,7 @@ function migrate(s){
   s.projects=(Array.isArray(s.projects)&&s.projects.length)?s.projects:defaultState().projects;
   s.log=Array.isArray(s.log)?s.log:[];
   s.archive=Array.isArray(s.archive)?s.archive:[];
+  if(!s.days||typeof s.days!=='object'||Array.isArray(s.days))s.days={};
   const D={notes:'',deadline:null,today:false,done:false,doneAt:null,spent:0,timerStart:null,timerRate:1,est:30,impact:2,urgency:2,complexity:1,subtasks:[],subsOpen:false,createdAt:0};
   s.tasks.forEach(t=>{
     if(!t||typeof t!=='object')return;
@@ -774,19 +798,48 @@ function closeDay(){
   const done=state.tasks.filter(t=>t.done);
   state.archive=(state.archive||[]).concat(done.map(t=>({title:t.title,projectId:t.projectId,est:t.est,spent:t.spent,doneAt:t.doneAt||Date.now()})));
   state.tasks=state.tasks.filter(t=>!t.done);
-  state.tasks.forEach(t=>t.today=eodSel.has(t.id));
   const d=new Date();d.setDate(d.getDate()+eodDayOffset);
-  state.nextWorkDay=eodDayOffset>1?localDS(d):null;
-  state.dayCapacity=eodCap<360?{date:localDS(d),mins:eodCap}:null;
+  const targetDs=localDS(d);
+  /* planifie les tâches sur le jour cible (modèle unifié plan), retire le flag « aujourd'hui » */
+  state.tasks.forEach(t=>{
+    if(eodSel.has(t.id))t.plan=targetDs;
+    else if(t.plan===targetDs)t.plan=null;
+    t.today=false;
+  });
+  setDayCap(targetDs,eodCap);
+  for(let k=1;k<eodDayOffset;k++){const rd=new Date();rd.setDate(rd.getDate()+k);setDayCap(localDS(rd),0);}
+  /* compat legacy */
+  state.nextWorkDay=eodDayOffset>1?targetDs:null;
+  state.dayCapacity=eodCap<360?{date:targetDs,mins:eodCap}:null;
   save();render();
   document.getElementById('eodOverlay').classList.remove('open');
   const when=eodDayOffset===1?'demain':d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'});
   const capTxt=eodCap<360?' · journée '+capLabel(eodCap)+' (~'+fmtMin(eodCap)+')':'';
   toast('🌙 Journée clôturée — prochaine journée : '+when+capTxt+' ('+eodSel.size+' tâche'+(eodSel.size>1?'s':'')+').'+(eodDayOffset>1?' Bon repos ! 🏖️':''));
 }
+/* ===== Planification par jour (capacité + tâches + repos), coexiste avec le legacy ===== */
+function dayCap(ds){
+  if(state.days&&state.days[ds]!==undefined)return state.days[ds];
+  if(state.dayCapacity&&state.dayCapacity.date===ds)return state.dayCapacity.mins;
+  return 360;
+}
+function isRest(ds){
+  if(dayCap(ds)===0)return true;
+  if(state.nextWorkDay&&ds>=todayStr()&&ds<state.nextWorkDay)return true;
+  return false;
+}
+function setDayCap(ds,mins){
+  state.days=state.days||{};
+  if(mins===360)delete state.days[ds]; else state.days[ds]=mins;
+}
+function plannedFor(ds){
+  const isToday=ds===todayStr();
+  return state.tasks.filter(t=>!t.done&&(t.plan===ds||(isToday&&t.today)));
+}
+function shortDay(ds){return new Date(ds+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'})}
 function todayCapacity(){
-  if(state.dayCapacity&&state.dayCapacity.date===todayStr())return state.dayCapacity.mins;
-  return null;
+  const c=dayCap(todayStr());
+  return (c>0&&c<360)?c:null;
 }
 
 /* ================= RENDER ================= */
@@ -795,7 +848,7 @@ function render(){
   document.getElementById('dateTitle').textContent=now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
 
   const open=state.tasks.filter(t=>!t.done);
-  const today=open.filter(t=>t.today).sort(taskSort);
+  const today=open.filter(t=>t.today||t.plan===todayStr()).sort(taskSort);
   const doneToday=state.tasks.filter(t=>t.done);
   document.getElementById('cntToday').textContent=today.length;
   document.getElementById('cntTasks').textContent=open.length;
@@ -803,15 +856,17 @@ function render(){
   /* --- nettoyage des plans périmés --- */
   if(state.nextWorkDay&&state.nextWorkDay<=todayStr()){state.nextWorkDay=null;saveLocal()}
   if(state.dayCapacity&&state.dayCapacity.date<todayStr()){state.dayCapacity=null;saveLocal()}
+  if(state.days){let ch=false;const ts=todayStr();for(const k in state.days)if(k<ts){delete state.days[k];ch=true}if(ch)saveLocal()}
   const cap=todayCapacity();
 
   /* --- héro : la tâche à attaquer maintenant (ou en cours, ou repos) --- */
-  const resting=!!(state.nextWorkDay&&state.nextWorkDay>todayStr());
+  const resting=isRest(todayStr());
   const running=state.tasks.find(t=>t.timerStart&&!t.done)||null;
   const hero=running||today[0]||(open.slice().sort((a,b)=>score(b)-score(a))[0]||null);
   if(resting&&!running)renderRestHero(today);
   else renderHero(hero,!!running,cap);
-  document.getElementById('nextTitle').textContent=resting&&!running?'Prêt pour '+new Date(state.nextWorkDay).toLocaleDateString('fr-FR',{weekday:'long'}):'Ensuite';
+  const nwd=nextWorkDs();
+  document.getElementById('nextTitle').textContent=resting&&!running?(nwd?'Prêt pour '+new Date(nwd+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long'}):'À venir'):'Ensuite';
 
   /* --- bandeau du jour --- */
   const estTotal=today.reduce((s,t)=>s+t.est,0);
@@ -856,13 +911,24 @@ function subsBlock(t){
   return `<span class="subs-toggle" onclick="toggleSubsOpen('${t.id}')">${t.subsOpen?'▾':'▸'} Étapes ${d}/${t.subtasks.length}</span>`+
     (t.subsOpen?`<div class="subs">${t.subtasks.map((s,i)=>`<div class="sub ${s.done?'sdone':''}" onclick="toggleSub('${t.id}',${i})"><span class="sc">✓</span>${esc(s.t)}</div>`).join('')}</div>`:'');
 }
+function nextWorkDs(){
+  for(let i=1;i<=21;i++){const d=new Date();d.setDate(d.getDate()+i);const ds=localDS(d);if(!isRest(ds))return ds;}
+  return null;
+}
 function renderRestHero(today){
-  const d=new Date(state.nextWorkDay);
-  const est=today.reduce((s,t)=>s+t.est,0);
+  const nwd=nextWorkDs();
+  const nextTasks=nwd?plannedFor(nwd):[];
+  const est=nextTasks.reduce((s,t)=>s+t.est,0);
   document.getElementById('heroBox').innerHTML=`<div class="hero"><div class="h-label">🏖️ Repos</div>
-    <div class="h-title">Prochaine journée : ${d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
-    <div class="h-why">${today.length?today.length+' tâche'+(today.length>1?'s':'')+' prête'+(today.length>1?'s':'')+' · '+fmtMin(est)+' estimé. Tout est calé — profite !':'Rien de planifié pour l\'instant — profite !'}</div>
-    <div class="h-sub"><button onclick="state.nextWorkDay=null;save();render();toast('💪 Mode travail réactivé')">💪 Finalement, je bosse aujourd'hui</button></div></div>`;
+    <div class="h-title">${nwd?'Prochaine journée : '+new Date(nwd+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}):'Journée de repos'}</div>
+    <div class="h-why">${nextTasks.length?nextTasks.length+' tâche'+(nextTasks.length>1?'s':'')+' prête'+(nextTasks.length>1?'s':'')+' · '+fmtMin(est)+' estimé. Tout est calé — profite !':'Rien de planifié pour l\'instant — profite !'}</div>
+    <div class="h-sub"><button onclick="workTodayAnyway()">💪 Finalement, je bosse aujourd'hui</button></div></div>`;
+}
+function workTodayAnyway(){
+  state.nextWorkDay=null;
+  if(state.days)delete state.days[todayStr()];
+  if(state.dayCapacity&&state.dayCapacity.date===todayStr())state.dayCapacity=null;
+  save();render();toast('💪 Mode travail réactivé');
 }
 function renderHero(t,run,cap){
   const el=document.getElementById('heroBox');
@@ -1456,6 +1522,63 @@ function shareWeek(){
 }
 
 /* ================= VUE SEMAINE (cockpit) ================= */
+/* ===== Planificateur de jour (depuis la vue Semaine) ===== */
+let planDs=null,planCap=360,planSel=new Set();
+function openDayPlan(ds){
+  planDs=ds;planCap=dayCap(ds);
+  planSel=new Set(plannedFor(ds).map(t=>t.id));
+  const isToday=ds===todayStr();
+  document.getElementById('dayTitle').textContent=isToday?'Aujourd\'hui':cap1(new Date(ds+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}));
+  renderPlanCap();renderDayRdv();renderDayTasks();
+  document.getElementById('dayOverlay').classList.add('open');
+}
+function renderPlanCap(){document.querySelectorAll('#dayCapSeg button').forEach(b=>b.classList.toggle('on',+b.dataset.v===planCap))}
+function setPlanCap(v){planCap=v;renderPlanCap();renderDayTasks()}
+function renderDayRdv(){
+  const el=document.getElementById('dayRdv');
+  const evs=eventsForDay(planDs).filter(e=>e.start&&e.start.dateTime);
+  if(!evs.length){el.innerHTML='';return}
+  const hh=x=>new Date(x).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const busy=evs.reduce((s,e)=>s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000,0);
+  el.innerHTML='<div class="f-group"><label>Rendez-vous agenda ('+fmtMin(Math.round(busy))+')</label><div class="task-list">'
+    +evs.map(e=>`<div class="rowt"><span class="pdot" style="background:${col(e._color)}"></span><span class="re" style="min-width:5.2rem">${hh(e.start.dateTime)}–${hh(e.end.dateTime)}</span><span class="rt" style="cursor:default">${esc(e.summary||'(RDV)')}</span></div>`).join('')+'</div></div>';
+}
+function renderDayTasks(){
+  const rest=planCap===0;
+  document.getElementById('dayTasksGroup').style.display=rest?'none':'block';
+  document.getElementById('dayTotal').style.display=rest?'none':'flex';
+  if(rest)return;
+  const open=state.tasks.filter(t=>!t.done).sort(taskSort);
+  document.getElementById('dayTaskList').innerHTML=open.length?open.map(t=>{
+    const on=planSel.has(t.id);
+    const elsewhere=t.plan&&t.plan!==planDs&&!(planDs===todayStr()&&t.today);
+    return `<div class="rowt selrow ${on?'on':''}" onclick="togglePlanSel('${t.id}')">
+      <span class="sc-box">✓</span><span class="pdot" style="background:${proj(t.projectId).color}"></span>
+      <span class="rt">${esc(t.title)}${elsewhere?` <span style="color:var(--faint);font-size:.7rem">→ ${shortDay(t.plan)}</span>`:''}</span>
+      <span class="re">${fmtMin(t.est)}${badges(t).some(b=>b[0]==='hot'||b[0]==='soon')?' ⏰':''}</span></div>`;
+  }).join(''):'<p class="hint">Aucune tâche en attente — ajoute-en depuis 📋 Tâches.</p>';
+  const tot=state.tasks.filter(t=>planSel.has(t.id)).reduce((s,t)=>s+t.est,0);
+  const over=tot>planCap;
+  document.getElementById('dayTotal').innerHTML=`<span><b>${planSel.size}</b> tâche(s)</span><span>·</span><span><b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(planCap)} dispo</span><span style="margin-left:auto;color:${over?'var(--warn)':'var(--ok)'}">${over?'⚠️ trop chargé':'✓ tenable'}</span>`;
+}
+function togglePlanSel(id){planSel.has(id)?planSel.delete(id):planSel.add(id);renderDayTasks()}
+function saveDayPlan(){
+  snapshot('planification jour');
+  setDayCap(planDs,planCap);
+  const isToday=planDs===todayStr(),rest=planCap===0;
+  state.tasks.forEach(t=>{
+    if(t.done)return;
+    if(rest){if(t.plan===planDs)t.plan=null;if(isToday)t.today=false;return}
+    if(planSel.has(t.id)){t.plan=planDs;if(isToday)t.today=true;}
+    else if(t.plan===planDs){t.plan=null;if(isToday&&t.today)t.today=false;}
+  });
+  /* cohérence mode repos legacy : si on refait de ce jour un jour travaillé, on lève le repos legacy */
+  if(!rest&&isToday){state.nextWorkDay=null;if(state.dayCapacity&&state.dayCapacity.date===planDs)state.dayCapacity=null;}
+  save();render();
+  document.getElementById('dayOverlay').classList.remove('open');
+  toast(rest?'🌙 Jour marqué en repos — '+(isToday?'aujourd\'hui':shortDay(planDs)):'✅ '+(isToday?'Aujourd\'hui':cap1(shortDay(planDs)))+' planifié'+(planSel.size?' · '+planSel.size+' tâche(s)':''));
+}
+document.getElementById('ckWeek').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.classList.contains('ck-day')){e.preventDefault();e.target.click()}});
 function renderCockpit(){
   const open=state.tasks.filter(t=>!t.done);
   const totalEst=open.reduce((s,t)=>s+t.est,0);
@@ -1472,20 +1595,23 @@ function renderCockpit(){
     const ds=localDS(d);
     const evs=eventsForDay(ds);
     const due=open.filter(t=>t.deadline===ds);
-    const planned=i===0?open.filter(t=>t.today&&!due.includes(t)):[];
-    const load=due.reduce((s,t)=>s+t.est,0)+planned.reduce((s,t)=>s+t.est,0)
-      +evs.reduce((s,e)=>e.start.dateTime?s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000:s,0);
+    const planned=plannedFor(ds).filter(t=>!due.includes(t));
+    const rest=isRest(ds);
+    const cap=dayCap(ds);
+    const evMin=evs.reduce((s,e)=>e.start.dateTime?s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000:s,0);
+    const load=due.reduce((s,t)=>s+t.est,0)+planned.reduce((s,t)=>s+t.est,0)+evMin;
+    const over=cap>0&&load>cap;
     const hh=x=>new Date(x).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
     const items=[
       ...evs.map(e=>`<div class="ck-item ev"><span class="pdot" style="background:${col(e._color)}"></span><span class="hr">${e.start.dateTime?hh(e.start.dateTime):'📅'}</span><span class="lbl">${esc(e.summary||'(RDV)')}</span></div>`),
       ...due.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">⏰ ${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`),
       ...planned.map(t=>`<div class="ck-item"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="lbl">${esc(t.title)}</span><span class="hr">${fmtMin(t.est)}</span></div>`)
     ];
-    const off=state.nextWorkDay&&ds>todayStr()&&ds<state.nextWorkDay;
-    days.push(`<div class="ck-day ${i===0?'todayd':''}" ${off?'style="opacity:.55"':''}>
-      <div class="ck-date"><span>${i===0?'Aujourd\'hui':d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'})}${off?' 🏖️':''}</span>
-      ${load>0?`<span class="ck-load">${load>=360?'🔴':load>=240?'🟠':'🟢'} ~${fmtMin(Math.round(load))}</span>`:''}</div>
-      ${items.length?items.join(''):'<div class="ck-empty">Rien de planifié</div>'}
+    const capBadge=cap===0?'🌙 repos':cap<360?(cap>=180?'🕐 partielle':'🔋 légère'):'';
+    days.push(`<div class="ck-day ${i===0?'todayd':''} ${rest?'restday':''}" onclick="openDayPlan('${ds}')" role="button" tabindex="0" title="Planifier ce jour">
+      <div class="ck-date"><span>${i===0?'Aujourd\'hui':cap1(d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric',month:'short'}))}${capBadge?' · '+capBadge:''}</span>
+      ${!rest&&load>0?`<span class="ck-load">${over?'🔴':load>=cap*0.7?'🟠':'🟢'} ~${fmtMin(Math.round(load))}${cap<360?' / '+fmtMin(cap):''}</span>`:'<span class="ck-load" style="color:var(--faint)">✎ planifier</span>'}</div>
+      ${rest?'<div class="ck-empty">🏖️ Journée de repos</div>':(items.length?items.join(''):'<div class="ck-empty">Rien de planifié — touche pour organiser</div>')}
     </div>`);
   }
   document.getElementById('ckWeek').innerHTML=days.join('');
