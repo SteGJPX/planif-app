@@ -985,7 +985,7 @@ function compactRow(t){
   const p=proj(t.projectId);
   const running=!!t.timerStart;
   return `<div class="rowt ${running?'runrow':''}"><span class="pdot" style="background:${p.color}"></span>
-    <span class="rt" onclick="openEdit('${t.id}')">${esc(t.title)}</span>
+    <span class="rt" onclick="openEdit('${t.id}')">${esc(t.title)}${t.plan&&t.plan!==todayStr()?` <span style="color:var(--accent2);font-size:.72rem">📅 ${shortDay(t.plan)}</span>`:''}</span>
     ${running?`<span class="t-timer" data-tt="${t.id}" style="flex-shrink:0">⏱</span>`:`<span class="re">${fmtMin(t.est)}</span>`}
     <button class="t-btn ${running?'pause':'play'}" onclick="toggleTimer('${t.id}')" title="${running?'Pause':'Démarrer'}">${running?'❚❚':'▶'}</button>
     <button class="t-btn" onclick="toggleDone('${t.id}')" title="Terminer">✓</button></div>`;
@@ -1015,6 +1015,7 @@ function renderList(elId,tasks,isToday,withArrows){
           <div class="t-meta">
             <span class="chip"><span class="pdot" style="background:${p.color}"></span>${esc(p.name)}</span>
             <span class="chip">⏳ ${fmtMin(t.est)}</span>
+            ${t.plan&&t.plan!==todayStr()?`<span class="chip" style="color:var(--accent2)">📅 ${shortDay(t.plan)}</span>`:''}
             ${badges(t).map(b=>`<span class="badge ${b[0]}">${b[1]}</span>`).join('')}
             ${hasTime?`<span class="t-timer" data-tt="${t.id}">⏱ ${fmtMs(spentNow(t))} / ${fmtMin(t.est)}${running&&t.timerRate===0.5?' · 🤝':''}</span>`:''}
           </div>
@@ -1570,7 +1571,7 @@ function shareWeek(){
 
 /* ================= VUE SEMAINE (cockpit) ================= */
 /* ===== Planificateur de jour (depuis la vue Semaine) ===== */
-let planDs=null,planCap=360,planSel=new Set(),planCommits=[],planCapManual=false;
+let planDs=null,planCap=360,planSel=new Set(),planCommits=[],planCapManual=false,planShowOther=false;
 function planBusyMin(){return planCommits.reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)+Math.round(gcalBusyMin(planDs))}
 function autoSuggestPlanCap(){if(planCapManual)return;const b=planBusyMin();const nv=b>=240?90:b>=90?180:360;if(nv!==planCap){planCap=nv;renderPlanCap()}}
 function openDayPlan(ds){
@@ -1581,6 +1582,7 @@ function openDayPlan(ds){
   const stored=(state.days&&state.days[ds]!==undefined)?state.days[ds]:(state.dayCapacity&&state.dayCapacity.date===ds?state.dayCapacity.mins:undefined);
   planCapManual=stored!==undefined;
   planCap=stored!==undefined?stored:suggestCapFor(ds);
+  planShowOther=false;
   const isToday=ds===todayStr();
   document.getElementById('dayTitle').textContent=isToday?'Aujourd\'hui':cap1(new Date(ds+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'}));
   renderPlanCap();renderDayRdv();renderDayCommits();renderDayTasks();
@@ -1613,15 +1615,20 @@ function renderDayTasks(){
   document.getElementById('dayTasksGroup').style.display=rest?'none':'block';
   document.getElementById('dayTotal').style.display=rest?'none':'flex';
   if(rest)return;
-  const open=state.tasks.filter(t=>!t.done).sort(taskSort);
-  document.getElementById('dayTaskList').innerHTML=open.length?open.map(t=>{
-    const on=planSel.has(t.id);
-    const elsewhere=t.plan&&t.plan!==planDs&&!(planDs===todayStr()&&t.today);
-    return `<div class="rowt selrow ${on?'on':''}" onclick="togglePlanSel('${t.id}')">
+  const open=state.tasks.filter(t=>!t.done);
+  const isElsewhere=t=>t.plan&&t.plan!==planDs&&!(planDs===todayStr()&&t.today)&&!planSel.has(t.id);
+  const pickable=open.filter(t=>!isElsewhere(t)).sort(taskSort);
+  const others=open.filter(isElsewhere).sort((a,b)=>a.plan<b.plan?-1:1);
+  const row=t=>{const on=planSel.has(t.id);return `<div class="rowt selrow ${on?'on':''}" onclick="togglePlanSel('${t.id}')">
       <span class="sc-box">✓</span><span class="pdot" style="background:${proj(t.projectId).color}"></span>
-      <span class="rt">${esc(t.title)}${elsewhere?` <span style="color:var(--faint);font-size:.7rem">→ ${shortDay(t.plan)}</span>`:''}</span>
-      <span class="re">${fmtMin(t.est)}${badges(t).some(b=>b[0]==='hot'||b[0]==='soon')?' ⏰':''}</span></div>`;
-  }).join(''):'<p class="hint">Aucune tâche en attente — ajoute-en depuis 📋 Tâches.</p>';
+      <span class="rt">${esc(t.title)}</span>
+      <span class="re">${fmtMin(t.est)}${badges(t).some(b=>b[0]==='hot'||b[0]==='soon')?' ⏰':''}</span></div>`;};
+  let html=pickable.length?pickable.map(row).join(''):'<p class="hint">Aucune tâche libre à planifier ici.</p>';
+  if(others.length){
+    html+=`<div class="subs-toggle" style="margin-top:.6rem" onclick="planShowOther=!planShowOther;renderDayTasks()">${planShowOther?'▾':'▸'} ${others.length} déjà planifiée(s) sur un autre jour</div>`;
+    if(planShowOther)html+=others.map(t=>`<div class="rowt" style="opacity:.7" onclick="togglePlanSel('${t.id}')"><span class="pdot" style="background:${proj(t.projectId).color}"></span><span class="rt" style="cursor:pointer">${esc(t.title)} <span style="color:var(--faint);font-size:.7rem">→ ${shortDay(t.plan)}</span></span><span class="re">déplacer ici ↩︎</span></div>`).join('');
+  }
+  document.getElementById('dayTaskList').innerHTML=html;
   const tot=state.tasks.filter(t=>planSel.has(t.id)).reduce((s,t)=>s+t.est,0);
   const over=tot>planCap;
   const mtg=planCommits.reduce((s,c)=>s+Math.max(0,hm2min(c.e)-hm2min(c.s)),0)+Math.round(gcalBusyMin(planDs));
