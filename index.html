@@ -97,6 +97,10 @@ section.view.active{display:block}
 .rowt .rt{flex:1;min-width:0;font-size:.92rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .rowt .re{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
 .rowt .t-btn{width:34px;height:34px;font-size:.8rem}
+.rowt.runrow{border-color:var(--accent);background:rgba(124,108,255,.07)}
+.updown{display:flex;flex-direction:column;gap:2px;flex-shrink:0;margin-top:.1rem}
+.updown button{width:24px;height:16px;border-radius:5px;font-size:.5rem;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);display:grid;place-items:center;transition:.15s}
+.updown button:hover{color:var(--txt);background:var(--card-h)}
 .done-strip{margin-top:1.1rem;text-align:center;font-size:.82rem;color:var(--muted)}
 /* ---------- Vue Semaine ---------- */
 .ck-day{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:.7rem .85rem;margin-bottom:.5rem;animation:fadeUp .35s ease both}
@@ -481,6 +485,23 @@ function load(){
 function save(){state.updatedAt=Date.now();localStorage.setItem(LS_KEY,JSON.stringify(state));if(typeof schedulePush==='function')schedulePush()}
 
 /* ================= SCORE & TRI ================= */
+function taskSort(a,b){
+  const ao=a.ord??null,bo=b.ord??null;
+  if(ao!==null&&bo!==null)return ao-bo;
+  if(ao!==null)return -1;
+  if(bo!==null)return 1;
+  return score(b)-score(a);
+}
+function hasManualOrder(){return state.tasks.some(t=>!t.done&&t.ord!==undefined)}
+function moveTask(id,dir){
+  const open=state.tasks.filter(t=>!t.done).sort(taskSort);
+  open.forEach((t,i)=>t.ord=i);
+  const i=open.findIndex(t=>t.id===id),j=i+dir;
+  if(j<0||j>=open.length)return;
+  [open[i].ord,open[j].ord]=[open[j].ord,open[i].ord];
+  save();render();
+}
+function resetOrder(){state.tasks.forEach(t=>{delete t.ord});save();render();toast('↺ Tri automatique par priorité rétabli')}
 function score(t){
   let s=t.impact*4+t.urgency*3+(4-t.complexity);
   if(t.est<=30)s+=2; else if(t.est<=60)s+=1;
@@ -510,27 +531,46 @@ function whyLabel(t){
 function proj(id){return state.projects.find(p=>p.id===id)||{name:'—',color:'#888'}}
 function fmtMin(m){if(m>=60){const h=Math.floor(m/60),r=m%60;return r?`${h}h${String(r).padStart(2,'0')}`:`${h}h`}return m+' min'}
 function fmtMs(ms){const m=Math.floor(ms/60000),s=Math.floor(ms%60000/1000);if(m>=60)return Math.floor(m/60)+'h'+String(m%60).padStart(2,'0');return m+':'+String(s).padStart(2,'0')}
-function spentNow(t){return t.spent+(t.timerStart?Date.now()-t.timerStart:0)}
+function spentNow(t){return t.spent+(t.timerStart?(Date.now()-t.timerStart)*(t.timerRate||1):0)}
+function liveExtra(){return runningTasks().reduce((s,t)=>s+(Date.now()-t.timerStart)*(t.timerRate||1),0)}
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function toast(msg){const el=document.getElementById('toast');el.innerHTML=msg;el.classList.add('show');clearTimeout(el._t);el._t=setTimeout(()=>el.classList.remove('show'),3200)}
 
-/* ================= TIMER ================= */
-function toggleTimer(id){
-  const t=state.tasks.find(x=>x.id===id);
-  if(t.timerStart){stopTimer(t)}
-  else{
-    state.tasks.forEach(x=>{if(x.timerStart)stopTimer(x,true)});
-    t.timerStart=Date.now();
-    if(!t.today){t.today=true}
-    toast('⏱️ C\'est parti : <b>'+esc(t.title)+'</b>');
-  }
-  save();render();
-}
+/* ================= TIMER (jusqu'à 2 tâches de front, temps partagé) ================= */
+function runningTasks(){return state.tasks.filter(t=>t.timerStart&&!t.done)}
 function stopTimer(t,silent){
-  const elapsed=Date.now()-t.timerStart;
-  t.spent+=elapsed;t.timerStart=null;
+  const elapsed=(Date.now()-t.timerStart)*(t.timerRate||1);
+  t.spent+=elapsed;t.timerStart=null;t.timerRate=1;
   logTime(t.projectId,elapsed);
   if(!silent)toast('⏸️ Pause — '+fmtMs(t.spent)+' au total sur cette tâche');
+}
+function resegment(t,rate){
+  const elapsed=(Date.now()-t.timerStart)*(t.timerRate||1);
+  t.spent+=elapsed;logTime(t.projectId,elapsed);
+  t.timerStart=Date.now();t.timerRate=rate;
+}
+function toggleTimer(id){
+  const t=state.tasks.find(x=>x.id===id);
+  const run=runningTasks().filter(x=>x.id!==id);
+  if(t.timerStart){
+    stopTimer(t);
+    if(run.length===1)resegment(run[0],1);
+  }else if(run.length===0){
+    t.timerStart=Date.now();t.timerRate=1;if(!t.today)t.today=true;
+    toast('⏱️ C\'est parti : <b>'+esc(t.title)+'</b>');
+  }else if(run.length===1){
+    const other=run[0];
+    if(confirm('« '+other.title.slice(0,60)+' » est déjà en cours.\n\nOK = mener les DEUX de front (temps partagé 50/50)\nAnnuler = mettre l\'autre en pause et basculer sur celle-ci')){
+      resegment(other,0.5);
+      t.timerStart=Date.now();t.timerRate=0.5;if(!t.today)t.today=true;
+      toast('🤝 Deux de front — le temps est partagé 50/50 entre les deux tâches');
+    }else{
+      stopTimer(other,true);
+      t.timerStart=Date.now();t.timerRate=1;if(!t.today)t.today=true;
+      toast('⏱️ Basculé sur : <b>'+esc(t.title)+'</b>');
+    }
+  }else{toast('⚠️ Maximum 2 tâches de front — mets-en une en pause d\'abord');return}
+  save();render();
 }
 function logTime(projectId,ms){
   const d=todayStr();
@@ -538,22 +578,25 @@ function logTime(projectId,ms){
   if(e)e.ms+=ms; else state.log.push({date:d,projectId,ms});
 }
 function tick(){
-  const t=state.tasks.find(x=>x.timerStart);
-  if(!t){document.title='Planif — Mon assistant de journée';return}
-  document.querySelectorAll('.task.running .t-timer').forEach(el=>{el.textContent='⏱ '+fmtMs(spentNow(t))+' / '+fmtMin(t.est)});
-  document.querySelectorAll('.task.running .t-est-bar>i').forEach(bar=>{const pct=Math.min(100,spentNow(t)/(t.est*60000)*100);bar.style.width=pct+'%';bar.classList.toggle('over',spentNow(t)>t.est*60000)});
+  const run=runningTasks();
+  if(!run.length){document.title='Planif — Mon assistant de journée';return}
+  run.forEach(t=>{
+    document.querySelectorAll('[data-tt="'+t.id+'"]').forEach(el=>{el.textContent='⏱ '+fmtMs(spentNow(t))+' / '+fmtMin(t.est)});
+    document.querySelectorAll('[data-tb="'+t.id+'"]').forEach(bar=>{const pct=Math.min(100,spentNow(t)/(t.est*60000)*100);bar.style.width=pct+'%';bar.classList.toggle('over',spentNow(t)>t.est*60000)});
+  });
+  const h=run[0];
   const ht=document.getElementById('heroTimer');
-  if(ht)ht.innerHTML=fmtMs(spentNow(t))+' <span>/ '+fmtMin(t.est)+'</span>';
+  if(ht)ht.innerHTML=fmtMs(spentNow(h))+' <span>/ '+fmtMin(h.est)+(h.timerRate===0.5?' · 🤝 50%':'')+'</span>';
   const hb=document.getElementById('heroBar');
-  if(hb){hb.style.width=Math.min(100,spentNow(t)/(t.est*60000)*100)+'%';hb.classList.toggle('over',spentNow(t)>t.est*60000)}
-  document.title='⏱ '+fmtMs(spentNow(t))+' — '+t.title;
+  if(hb){hb.style.width=Math.min(100,spentNow(h)/(h.est*60000)*100)+'%';hb.classList.toggle('over',spentNow(h)>h.est*60000)}
+  document.title='⏱ '+fmtMs(spentNow(h))+(run.length>1?' 🤝':'')+' — '+h.title;
 }
 
 /* ================= ACTIONS ================= */
 function toggleDone(id){
   const t=state.tasks.find(x=>x.id===id);
   if(!t.done){
-    if(t.timerStart)stopTimer(t,true);
+    if(t.timerStart){stopTimer(t,true);const rem=runningTasks();if(rem.length===1)resegment(rem[0],1)}
     t.done=true;t.doneAt=Date.now();
     if(t.spent>0){
       const ratio=t.spent/(t.est*60000);
@@ -594,8 +637,8 @@ function showEodStep(n){
   document.getElementById('eodTitle').textContent=n===1?'🌙 Bilan de la journée':'☀️ Préparer demain';
 }
 function openEod(){
-  const running=state.tasks.find(t=>t.timerStart);
-  if(running){stopTimer(running,true);save()}
+  const wasRunning=runningTasks();
+  if(wasRunning.length){wasRunning.forEach(t=>stopTimer(t,true));save()}
   const done=state.tasks.filter(t=>t.done);
   const focus=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0);
   const timed=done.filter(t=>t.spent>0&&t.est>0);
@@ -623,7 +666,7 @@ function openEod(){
   document.getElementById('eodOverlay').classList.add('open');
 }
 function renderEodTomorrow(){
-  const open=state.tasks.filter(t=>!t.done).sort((a,b)=>score(b)-score(a));
+  const open=state.tasks.filter(t=>!t.done).sort(taskSort);
   document.getElementById('eodTomorrowList').innerHTML=open.length?open.map(t=>{
     const on=eodSel.has(t.id);
     return `<div class="rowt selrow ${on?'on':''}" onclick="toggleEodSel('${t.id}')">
@@ -655,7 +698,7 @@ function render(){
   document.getElementById('dateTitle').textContent=now.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
 
   const open=state.tasks.filter(t=>!t.done);
-  const today=open.filter(t=>t.today).sort((a,b)=>score(b)-score(a));
+  const today=open.filter(t=>t.today).sort(taskSort);
   const doneToday=state.tasks.filter(t=>t.done);
   document.getElementById('cntToday').textContent=today.length;
   document.getElementById('cntTasks').textContent=open.length;
@@ -671,7 +714,7 @@ function render(){
 
   /* --- bandeau du jour --- */
   const estTotal=today.reduce((s,t)=>s+t.est,0);
-  const spentToday=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0)+(running?Date.now()-running.timerStart:0);
+  const spentToday=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0)+liveExtra();
   const planCount=today.length+doneToday.length;
   const pct=planCount?Math.round(doneToday.length/planCount*100):0;
   const busy=busyRemaining();
@@ -692,7 +735,7 @@ function render(){
 
   renderFilters();
   const filtered=currentFilter==='all'?open:open.filter(t=>t.projectId===currentFilter);
-  renderList('backlogList',filtered.slice().sort((a,b)=>score(b)-score(a)),false);
+  renderList('backlogList',filtered.slice().sort(taskSort),false,true);
   if(!filtered.length)document.getElementById('backlogList').innerHTML=`<div class="empty"><div class="e-ico">📭</div>Aucune tâche ici.</div>`;
 
   const doneRecent=doneToday.slice().sort((a,b)=>b.doneAt-a.doneAt).slice(0,10);
@@ -747,10 +790,11 @@ function renderHero(t,run){
 }
 function compactRow(t){
   const p=proj(t.projectId);
-  return `<div class="rowt"><span class="pdot" style="background:${p.color}"></span>
+  const running=!!t.timerStart;
+  return `<div class="rowt ${running?'runrow':''}"><span class="pdot" style="background:${p.color}"></span>
     <span class="rt" onclick="openEdit('${t.id}')">${esc(t.title)}</span>
-    <span class="re">${fmtMin(t.est)}</span>
-    <button class="t-btn play" onclick="toggleTimer('${t.id}')" title="Démarrer">▶</button>
+    ${running?`<span class="t-timer" data-tt="${t.id}" style="flex-shrink:0">⏱</span>`:`<span class="re">${fmtMin(t.est)}</span>`}
+    <button class="t-btn ${running?'pause':'play'}" onclick="toggleTimer('${t.id}')" title="${running?'Pause':'Démarrer'}">${running?'❚❚':'▶'}</button>
     <button class="t-btn" onclick="toggleDone('${t.id}')" title="Terminer">✓</button></div>`;
 }
 
@@ -758,10 +802,11 @@ let currentFilter='all';
 function renderFilters(){
   const el=document.getElementById('projFilters');
   el.innerHTML=`<span class="chip ${currentFilter==='all'?'on':''}" onclick="currentFilter='all';render()">Tout</span>`+
-    state.projects.map(p=>`<span class="chip ${currentFilter===p.id?'on':''}" onclick="currentFilter='${p.id}';render()"><span class="pdot" style="background:${p.color}"></span>${esc(p.name)}</span>`).join('');
+    state.projects.map(p=>`<span class="chip ${currentFilter===p.id?'on':''}" onclick="currentFilter='${p.id}';render()"><span class="pdot" style="background:${p.color}"></span>${esc(p.name)}</span>`).join('')+
+    (hasManualOrder()?`<span class="chip" onclick="resetOrder()" title="Revenir au tri par priorité">↺ Tri auto</span>`:'');
 }
 
-function renderList(elId,tasks,isToday){
+function renderList(elId,tasks,isToday,withArrows){
   document.getElementById(elId).innerHTML=tasks.map(t=>{
     const p=proj(t.projectId);
     const running=!!t.timerStart;
@@ -770,6 +815,7 @@ function renderList(elId,tasks,isToday){
     const pct=Math.min(100,spentNow(t)/(t.est*60000)*100);
     return `<div class="task ${running?'running':''} ${t.done?'done-t':''} ${hasTime?'has-time':''}">
       <div class="t-row">
+        ${withArrows&&!t.done?`<div class="updown"><button onclick="moveTask('${t.id}',-1)" title="Monter">▲</button><button onclick="moveTask('${t.id}',1)" title="Descendre">▼</button></div>`:''}
         <button class="t-check" onclick="toggleDone('${t.id}')" title="Terminer">✓</button>
         <div class="t-main">
           <div class="t-title">${esc(t.title)}</div>
@@ -777,9 +823,9 @@ function renderList(elId,tasks,isToday){
             <span class="chip"><span class="pdot" style="background:${p.color}"></span>${esc(p.name)}</span>
             <span class="chip">⏳ ${fmtMin(t.est)}</span>
             ${badges(t).map(b=>`<span class="badge ${b[0]}">${b[1]}</span>`).join('')}
-            ${hasTime?`<span class="t-timer">⏱ ${fmtMs(spentNow(t))} / ${fmtMin(t.est)}</span>`:''}
+            ${hasTime?`<span class="t-timer" data-tt="${t.id}">⏱ ${fmtMs(spentNow(t))} / ${fmtMin(t.est)}${running&&t.timerRate===0.5?' · 🤝':''}</span>`:''}
           </div>
-          <div class="t-est-bar"><i class="${spentNow(t)>t.est*60000?'over':''}" style="width:${pct}%"></i></div>
+          <div class="t-est-bar"><i data-tb="${t.id}" class="${spentNow(t)>t.est*60000?'over':''}" style="width:${pct}%"></i></div>
           ${t.subtasks.length?`<span class="subs-toggle" onclick="toggleSubsOpen('${t.id}')">${t.subsOpen?'▾':'▸'} Étapes ${subsDone}/${t.subtasks.length}</span>`:''}
           ${t.subtasks.length&&t.subsOpen?`<div class="subs">${t.subtasks.map((s,i)=>`<div class="sub ${s.done?'sdone':''}" onclick="toggleSub('${t.id}',${i})"><span class="sc">✓</span>${esc(s.t)}</div>`).join('')}</div>`:''}
         </div>
@@ -798,14 +844,13 @@ let projRange=7;
 function mondayOf(ts){const d=new Date(ts);d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return d}
 function renderStats(){
   const now=Date.now();
-  const running=state.tasks.find(t=>t.timerStart);
   const doneAll=state.tasks.filter(t=>t.done).concat(state.archive||[]);
   const log=state.log||[];
   const logMs=(from,to)=>log.filter(l=>{const t=new Date(l.date).getTime();return t>=from&&t<to}).reduce((s,l)=>s+l.ms,0);
 
   /* --- tuiles --- */
   const weekStart=mondayOf(now).getTime();
-  const focus7=logMs(now-7*864e5,now+864e5)+(running?Date.now()-running.timerStart:0);
+  const focus7=logMs(now-7*864e5,now+864e5)+liveExtra();
   const doneWeek=doneAll.filter(t=>(t.doneAt||0)>=weekStart).length;
   document.getElementById('statsTiles').innerHTML=`
     <div class="stat-tile"><div class="v">${fmtMs(focus7)}</div><div class="l">focus / 7 jours</div></div>
@@ -818,7 +863,7 @@ function renderStats(){
     const d=new Date();d.setDate(d.getDate()-i);
     const ds=localDS(d);
     let ms=log.filter(l=>l.date===ds).reduce((s,l)=>s+l.ms,0);
-    if(i===0&&running)ms+=Date.now()-running.timerStart;
+    if(i===0)ms+=liveExtra();
     maxMs=Math.max(maxMs,ms);
     days.push({ds,ms,lbl:'DLMMJVS'[d.getDay()],cur:i===0});
   }
@@ -836,7 +881,7 @@ function renderStats(){
     `<span class="chip ${projRange===d?'on':''}" onclick="projRange=${d};renderStats()">${l}</span>`).join('');
   const byProj={};
   log.filter(l=>new Date(l.date).getTime()>=now-projRange*864e5).forEach(l=>{byProj[l.projectId]=(byProj[l.projectId]||0)+l.ms});
-  if(running)byProj[running.projectId]=(byProj[running.projectId]||0)+(Date.now()-running.timerStart);
+  runningTasks().forEach(rt=>{byProj[rt.projectId]=(byProj[rt.projectId]||0)+(Date.now()-rt.timerStart)*(rt.timerRate||1)});
   const total=Object.values(byProj).reduce((a,b)=>a+b,0);
   document.getElementById('projBars').innerHTML=total?state.projects
     .map(p=>({p,ms:byProj[p.id]||0})).filter(x=>x.ms>0).sort((a,b)=>b.ms-a.ms)
@@ -1437,7 +1482,10 @@ load();render();
 if(syncReady())pullCloud(false);
 if(gcal.clientId){setTimeout(()=>{loadGcalEvents();loadMail()},1500);setInterval(()=>{loadGcalEvents();loadMail()},300000)}
 tickInt=setInterval(tick,1000);
-setInterval(()=>{const t=state.tasks.find(x=>x.timerStart);if(t){save()}},15000);
+setInterval(()=>{if(runningTasks().length)save()},15000);
+/* synchro continue : récupère les changements des autres appareils */
+setInterval(()=>{if(syncReady()&&!pushTimer&&!runningTasks().length)pullCloud(false)},120000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&syncReady()&&!pushTimer&&!runningTasks().length)pullCloud(false)});
 if('serviceWorker' in navigator&&location.protocol.startsWith('http')){
   navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
