@@ -215,6 +215,9 @@ section.view.active{display:block}
 .seg{display:flex;gap:.35rem}
 .seg button{flex:1;padding:.5rem;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);font-size:.82rem;font-weight:600;color:var(--muted);transition:.15s}
 .seg button.on{background:rgba(124,108,255,.2);border-color:var(--accent);color:#fff}
+.seg button small{font-size:.68rem;color:var(--muted);font-weight:500}
+.seg button.on small{color:rgba(255,255,255,.7)}
+.cap-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.15rem .55rem;border-radius:999px;font-size:.72rem;font-weight:600;background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.3)}
 .dur-chips{display:flex;flex-wrap:wrap;gap:.35rem}
 .dur-chips button{padding:.4rem .7rem;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--border);font-size:.82rem;color:var(--muted);transition:.15s}
 .dur-chips button.on{background:rgba(34,211,238,.15);border-color:var(--accent2);color:#fff}
@@ -399,7 +402,15 @@ section.view.active{display:block}
       <div class="f-group"><label>Ma prochaine journée de travail</label>
         <div class="dur-chips" id="eodDayChips"></div>
       </div>
-      <p class="hint" style="margin-bottom:.8rem">Coche ce que tu veux attaquer ce jour-là. Conseil : reste sous ~6h d'estimé pour garder de la marge (imprévus, mails…).</p>
+      <div class="f-group"><label>Ma disponibilité ce jour-là</label>
+        <div class="seg" id="eodCapSeg">
+          <button data-v="360" class="on" onclick="eodCap=360;renderEodCap();renderEodTomorrow()">💪 Pleine<br><small>~6h</small></button>
+          <button data-v="180" onclick="eodCap=180;renderEodCap();renderEodTomorrow()">🕐 Partielle<br><small>~3h</small></button>
+          <button data-v="90" onclick="eodCap=90;renderEodCap();renderEodTomorrow()">🔋 Légère<br><small>~1h30</small></button>
+        </div>
+        <p class="hint" id="eodCapHint" style="margin-top:.4rem">Réunion, RDV, trajet, fatigue… choisis le temps de vrai travail réaliste. L'app adapte ce qui tient dans ta journée.</p>
+      </div>
+      <p class="hint" style="margin-bottom:.8rem">Coche ce que tu veux attaquer ce jour-là.</p>
       <div class="task-list" id="eodTomorrowList"></div>
       <div class="strip" id="eodTotal" style="margin-top:.8rem;margin-bottom:0"></div>
       <div class="modal-actions">
@@ -622,14 +633,26 @@ function toggleSubsOpen(tid){
   t.subsOpen=!t.subsOpen;save();render();
 }
 /* ================= FIN DE JOURNÉE ================= */
-let eodSel=new Set(),eodDayOffset=1;
+let eodSel=new Set(),eodDayOffset=1,eodCap=360;
+function capLabel(m){return m>=360?'pleine':m>=180?'partielle':'légère'}
 function renderEodDays(){
   const el=document.getElementById('eodDayChips');if(!el)return;
   el.innerHTML=Array.from({length:7},(_,i)=>{
     const off=i+1,d=new Date();d.setDate(d.getDate()+off);
     const lbl=off===1?'Demain':d.toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
-    return `<button class="${eodDayOffset===off?'on':''}" onclick="eodDayOffset=${off};renderEodDays()">${lbl}</button>`;
+    return `<button class="${eodDayOffset===off?'on':''}" onclick="eodDayOffset=${off};suggestCap();renderEodDays()">${lbl}</button>`;
   }).join('');
+}
+function suggestCap(){
+  /* si l'agenda montre des RDV ce jour-là, propose une capacité réduite */
+  const d=new Date();d.setDate(d.getDate()+eodDayOffset);
+  const evs=eventsForDay(localDS(d)).filter(e=>e.start&&e.start.dateTime);
+  const busyMin=evs.reduce((s,e)=>s+(new Date(e.end.dateTime)-new Date(e.start.dateTime))/60000,0);
+  if(busyMin>=180)eodCap=90; else if(busyMin>=60)eodCap=180; else eodCap=360;
+  renderEodCap();
+}
+function renderEodCap(){
+  document.querySelectorAll('#eodCapSeg button').forEach(b=>b.classList.toggle('on',+b.dataset.v===eodCap));
 }
 function showEodStep(n){
   document.getElementById('eodStep1').style.display=n===1?'block':'none';
@@ -660,7 +683,7 @@ function openEod(){
   document.getElementById('eodVerdict').innerHTML='<p class="hint" style="font-size:.9rem">'+verdict+'</p>';
   /* pré-sélection : les tâches du jour non finies */
   eodSel=new Set(state.tasks.filter(t=>!t.done&&t.today).map(t=>t.id));
-  eodDayOffset=1;renderEodDays();
+  eodDayOffset=1;eodCap=360;renderEodDays();suggestCap();
   renderEodTomorrow();
   showEodStep(1);
   document.getElementById('eodOverlay').classList.add('open');
@@ -675,8 +698,9 @@ function renderEodTomorrow(){
       <span class="re">${fmtMin(t.est)}${badges(t).some(b=>b[0]==='hot'||b[0]==='soon')?' ⏰':''}</span></div>`;
   }).join(''):'<p class="hint">Plus aucune tâche en attente — ajoute-en depuis 📋 Tâches.</p>';
   const tot=state.tasks.filter(t=>eodSel.has(t.id)).reduce((s,t)=>s+t.est,0);
-  document.getElementById('eodTotal').innerHTML=`<span><b>${eodSel.size}</b> tâche${eodSel.size>1?'s':''} pour demain</span><span>·</span><span><b>${fmtMin(tot)||'0 min'}</b> estimé</span>`
-    +(tot>360?`<span style="margin-left:auto;color:var(--warn)">⚠️ chargé</span>`:`<span style="margin-left:auto;color:var(--ok)">✓ tenable</span>`);
+  const over=tot>eodCap;
+  document.getElementById('eodTotal').innerHTML=`<span><b>${eodSel.size}</b> tâche${eodSel.size>1?'s':''}</span><span>·</span><span><b>${fmtMin(tot)||'0 min'}</b> / ${fmtMin(eodCap)} dispo</span>`
+    +(over?`<span style="margin-left:auto;color:var(--warn)">⚠️ trop chargé</span>`:`<span style="margin-left:auto;color:var(--ok)">✓ tenable</span>`);
 }
 function toggleEodSel(id){eodSel.has(id)?eodSel.delete(id):eodSel.add(id);renderEodTomorrow()}
 function closeDay(){
@@ -686,10 +710,16 @@ function closeDay(){
   state.tasks.forEach(t=>t.today=eodSel.has(t.id));
   const d=new Date();d.setDate(d.getDate()+eodDayOffset);
   state.nextWorkDay=eodDayOffset>1?localDS(d):null;
+  state.dayCapacity=eodCap<360?{date:localDS(d),mins:eodCap}:null;
   save();render();
   document.getElementById('eodOverlay').classList.remove('open');
   const when=eodDayOffset===1?'demain':d.toLocaleDateString('fr-FR',{weekday:'long',day:'numeric'});
-  toast('🌙 Journée clôturée — prochaine journée : '+when+' ('+eodSel.size+' tâche'+(eodSel.size>1?'s':'')+' prête'+(eodSel.size>1?'s':'')+').'+(eodDayOffset>1?' Bon repos ! 🏖️':' Repose-toi bien !'));
+  const capTxt=eodCap<360?' · journée '+capLabel(eodCap)+' (~'+fmtMin(eodCap)+')':'';
+  toast('🌙 Journée clôturée — prochaine journée : '+when+capTxt+' ('+eodSel.size+' tâche'+(eodSel.size>1?'s':'')+').'+(eodDayOffset>1?' Bon repos ! 🏖️':''));
+}
+function todayCapacity(){
+  if(state.dayCapacity&&state.dayCapacity.date===todayStr())return state.dayCapacity.mins;
+  return null;
 }
 
 /* ================= RENDER ================= */
@@ -703,13 +733,17 @@ function render(){
   document.getElementById('cntToday').textContent=today.length;
   document.getElementById('cntTasks').textContent=open.length;
 
-  /* --- héro : la tâche à attaquer maintenant (ou en cours, ou repos) --- */
+  /* --- nettoyage des plans périmés --- */
   if(state.nextWorkDay&&state.nextWorkDay<=todayStr()){state.nextWorkDay=null;save()}
+  if(state.dayCapacity&&state.dayCapacity.date<todayStr()){state.dayCapacity=null;save()}
+  const cap=todayCapacity();
+
+  /* --- héro : la tâche à attaquer maintenant (ou en cours, ou repos) --- */
   const resting=!!(state.nextWorkDay&&state.nextWorkDay>todayStr());
   const running=state.tasks.find(t=>t.timerStart&&!t.done)||null;
   const hero=running||today[0]||(open.slice().sort((a,b)=>score(b)-score(a))[0]||null);
   if(resting&&!running)renderRestHero(today);
-  else renderHero(hero,!!running);
+  else renderHero(hero,!!running,cap);
   document.getElementById('nextTitle').textContent=resting&&!running?'Prêt pour '+new Date(state.nextWorkDay).toLocaleDateString('fr-FR',{weekday:'long'}):'Ensuite';
 
   /* --- bandeau du jour --- */
@@ -718,12 +752,13 @@ function render(){
   const planCount=today.length+doneToday.length;
   const pct=planCount?Math.round(doneToday.length/planCount*100):0;
   const busy=busyRemaining();
+  const capOver=cap&&estTotal>cap;
   document.getElementById('dayStrip').innerHTML=
     `<span><b>${today.length}</b> à faire</span><span>·</span>
-     <span><b>${fmtMin(estTotal)||'0 min'}</b> estimé</span><span>·</span>
+     <span><b>${fmtMin(estTotal)||'0 min'}</b> estimé${cap?' / '+fmtMin(cap)+' dispo':''}</span><span>·</span>
      <span>⏱ <b>${fmtMs(spentToday)}</b> focus</span>
      ${busy>0?`<span>·</span><span>📅 <b>${fmtMs(busy)}</b> de RDV</span>`:''}
-     <span style="margin-left:auto"><b>${pct}%</b></span>
+     ${cap?`<span class="cap-chip" style="margin-left:auto">${cap>=180?'🕐 partielle':'🔋 légère'}${capOver?' · ⚠️ trop chargé':''}</span>`:`<span style="margin-left:auto"><b>${pct}%</b></span>`}
      <div class="pbar"><i style="width:${pct}%"></i></div>`;
 
   /* --- file « Ensuite » --- */
@@ -762,10 +797,11 @@ function renderRestHero(today){
     <div class="h-why">${today.length?today.length+' tâche'+(today.length>1?'s':'')+' prête'+(today.length>1?'s':'')+' · '+fmtMin(est)+' estimé. Tout est calé — profite !':'Rien de planifié pour l\'instant — profite !'}</div>
     <div class="h-sub"><button onclick="state.nextWorkDay=null;save();render();toast('💪 Mode travail réactivé')">💪 Finalement, je bosse aujourd'hui</button></div></div>`;
 }
-function renderHero(t,run){
+function renderHero(t,run,cap){
   const el=document.getElementById('heroBox');
+  const capNote=cap?`<div class="h-why" style="color:var(--warn);margin-bottom:.2rem">${cap>=180?'🕐 Journée partielle':'🔋 Journée légère'} · ~${fmtMin(cap)} de vrai travail dispo — vise l'essentiel</div>`:'';
   if(!t){
-    el.innerHTML=`<div class="hero"><div class="h-label">🎯 Maintenant</div><div class="h-title">Journée libre !</div>
+    el.innerHTML=`<div class="hero"><div class="h-label">🎯 Maintenant</div>${capNote}<div class="h-title">Journée libre !</div>
       <div class="h-why">Ajoute des tâches puis marque-les ☀️ pour construire ta journée.</div>
       <div class="h-actions"><button class="btn primary" onclick="startVoice()">🎤 Dicter une tâche</button><button class="btn ghost" onclick="openModal(null)">＋ Nouvelle tâche</button></div></div>`;
     return;
@@ -781,7 +817,7 @@ function renderHero(t,run){
       <div class="h-actions"><button class="btn ghost" onclick="toggleTimer('${t.id}')">❚❚ Pause</button><button class="btn primary" onclick="toggleDone('${t.id}')">✓ Terminé</button></div>
       ${subsBlock(t)}</div>`;
   }else{
-    el.innerHTML=`<div class="hero"><div class="h-label">🎯 À attaquer maintenant</div><div class="h-title">${esc(t.title)}</div>
+    el.innerHTML=`<div class="hero"><div class="h-label">🎯 À attaquer maintenant</div>${capNote}<div class="h-title">${esc(t.title)}</div>
       <div class="h-why">${whyLabel(t)}</div><div class="h-meta">${chips}</div>
       <div class="h-actions"><button class="btn primary" onclick="toggleTimer('${t.id}')">▶ Lancer · ${fmtMin(t.est)}</button></div>
       <div class="h-sub"><button onclick="toggleDone('${t.id}')">✓ Déjà fait</button><button onclick="toggleToday('${t.id}')">↩︎ Reporter</button><button onclick="openEdit('${t.id}')">✎ Modifier</button></div>
