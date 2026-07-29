@@ -50,7 +50,7 @@ nav.tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(.9rem + 
   display:flex;gap:.25rem;padding:.35rem;border-radius:999px;
   background:rgba(16,21,39,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   border:1px solid var(--border);box-shadow:var(--shadow)}
-nav.tabs button{padding:.6rem 1.15rem;border-radius:999px;font-size:.9rem;font-weight:600;color:var(--muted);transition:.25s;display:flex;align-items:center;gap:.4rem;white-space:nowrap}
+nav.tabs button{padding:.75rem 1.05rem;border-radius:999px;font-size:.9rem;font-weight:600;color:var(--muted);transition:.25s;display:flex;align-items:center;gap:.4rem;white-space:nowrap}
 nav.tabs button.active{background:var(--grad);color:#fff;box-shadow:0 4px 18px rgba(124,108,255,.45)}
 nav.tabs button .cnt{font-size:.72rem;background:rgba(255,255,255,.18);border-radius:999px;padding:0 .45rem;min-width:1.3rem;text-align:center}
 
@@ -86,7 +86,7 @@ section.view.active{display:block}
 .h-actions{display:flex;gap:.6rem;margin-top:1rem}
 .h-actions .btn{flex:1;padding:.8rem;font-size:1rem}
 .h-sub{display:flex;gap:.4rem;margin-top:.55rem;justify-content:center;flex-wrap:wrap}
-.h-sub button{font-size:.8rem;color:var(--muted);padding:.35rem .6rem;border-radius:8px;transition:.15s}
+.h-sub button{font-size:.82rem;color:var(--muted);padding:.55rem .7rem;border-radius:10px;transition:.15s}
 .h-sub button:hover{color:var(--txt);background:var(--card-h)}
 /* ---------- Bandeau du jour ---------- */
 .strip{display:flex;align-items:center;gap:.55rem;font-size:.82rem;color:var(--muted);margin-bottom:1rem;padding:.7rem .9rem;background:var(--card);border:1px solid var(--border);border-radius:14px;flex-wrap:wrap}
@@ -98,12 +98,34 @@ section.view.active{display:block}
 .rowt .pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 .rowt .rt{flex:1;min-width:0;font-size:.92rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
 .rowt .re{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
-.rowt .t-btn{width:34px;height:34px;font-size:.8rem}
+.rowt .t-btn{width:42px;height:42px;font-size:.85rem}
 .rowt.runrow{border-color:var(--accent);background:rgba(124,108,255,.07)}
 .updown{display:flex;flex-direction:column;gap:2px;flex-shrink:0;margin-top:.1rem}
-.updown button{width:24px;height:16px;border-radius:5px;font-size:.5rem;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);display:grid;place-items:center;transition:.15s}
+.updown button{width:32px;height:22px;border-radius:6px;font-size:.62rem;background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--muted);display:grid;place-items:center;transition:.15s}
 .updown button:hover{color:var(--txt);background:var(--card-h)}
 .done-strip{margin-top:1.1rem;text-align:center;font-size:.82rem;color:var(--muted)}
+/* ---------- Programme du jour ---------- */
+.prog{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:1rem 1rem .8rem;margin-bottom:1rem;animation:fadeUp .4s ease both}
+.prog-head{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem;margin-bottom:.6rem;flex-wrap:wrap}
+.prog-title{font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent2);font-weight:700}
+.prog-sum{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.prog-cap{font-size:.8rem;color:var(--warn);margin:-.2rem 0 .6rem}
+.pnum{width:22px;height:22px;border-radius:8px;background:rgba(255,255,255,.08);display:grid;place-items:center;font-size:.72rem;font-weight:700;flex-shrink:0;color:var(--muted)}
+.pnum.on{background:var(--grad);color:#fff}
+.prog-now{background:linear-gradient(160deg,rgba(124,108,255,.13),rgba(34,211,238,.05));border:1px solid rgba(124,108,255,.35);border-radius:16px;padding:.9rem;margin-bottom:.55rem}
+.prog-now-top{display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem;flex-wrap:wrap}
+.prog-now-lbl{font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent2);font-weight:700}
+.prog-now-title{font-size:1.15rem;font-weight:700;line-height:1.3;text-wrap:balance}
+.prog-row{display:flex;align-items:center;gap:.55rem;padding:.55rem .2rem;border-bottom:1px solid var(--border)}
+.prog-row:last-of-type{border-bottom:none}
+.prog-row .rt{flex:1;min-width:0;font-size:.92rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.prog-row .re{font-size:.75rem;color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
+.prog-row.runrow{background:rgba(124,108,255,.07);border-radius:10px;padding-left:.5rem}
+.prog-foot{margin-top:.7rem}
+.prog-foot .pbar{height:5px;margin-bottom:.35rem}
+.prog-foot-txt{font-size:.74rem;color:var(--muted)}
+.fab{position:fixed;right:1rem;bottom:calc(4.9rem + var(--safe-b));width:54px;height:54px;border-radius:50%;background:var(--grad);color:#fff;font-size:1.7rem;font-weight:600;box-shadow:0 6px 22px rgba(124,108,255,.5);z-index:49;display:grid;place-items:center;transition:.2s}
+.fab:hover{transform:scale(1.07)}
 /* ---------- Vue Semaine ---------- */
 .ck-day{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:.7rem .85rem;margin-bottom:.5rem;animation:fadeUp .35s ease both;cursor:pointer;transition:border-color .2s,background .2s}
 .ck-day:hover{border-color:var(--border-h);background:var(--card-h)}
@@ -122,7 +144,7 @@ section.view.active{display:block}
 .spark .sb{flex:1;background:var(--grad);border-radius:3px 3px 0 0;min-height:2px;opacity:.8;transition:height .5s cubic-bezier(.22,1,.36,1)}
 .spark .sb.zero{background:rgba(255,255,255,.08)}
 .spark .sb.cur{opacity:1;box-shadow:0 0 8px rgba(124,108,255,.5)}
-.spark-lbls{display:flex;gap:3px;font-size:.58rem;color:var(--faint);text-align:center}
+.spark-lbls{display:flex;gap:3px;font-size:.7rem;color:var(--faint);text-align:center}
 .spark-lbls span{flex:1}
 .wk-row{display:flex;align-items:center;gap:.6rem;padding:.45rem 0;border-bottom:1px solid var(--border);font-size:.83rem}
 .wk-row:last-child{border-bottom:none}
@@ -155,7 +177,7 @@ section.view.active{display:block}
 .badge.quick{background:rgba(52,211,153,.12);color:var(--ok);border:1px solid rgba(52,211,153,.3)}
 .badge.soon{background:rgba(251,191,36,.12);color:var(--warn);border:1px solid rgba(251,191,36,.3)}
 .t-actions{display:flex;gap:.35rem;flex-shrink:0}
-.t-btn{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-size:.95rem;background:rgba(255,255,255,.05);border:1px solid var(--border);transition:.2s;color:var(--muted)}
+.t-btn{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;font-size:.95rem;background:rgba(255,255,255,.05);border:1px solid var(--border);transition:.2s;color:var(--muted)}
 .t-btn:hover{background:var(--card-h);color:var(--txt);border-color:var(--border-h)}
 .t-btn.play{background:var(--grad);color:#fff;border:none;box-shadow:0 3px 14px rgba(124,108,255,.4)}
 .t-btn.play:hover{transform:scale(1.06)}
@@ -169,9 +191,9 @@ section.view.active{display:block}
 
 /* Sous-tâches */
 .subs{margin-top:.6rem;display:flex;flex-direction:column;gap:.25rem;border-left:2px solid var(--border);padding-left:.75rem}
-.sub{display:flex;align-items:center;gap:.5rem;font-size:.83rem;color:var(--muted);cursor:pointer;padding:.12rem 0;transition:.15s}
+.sub{display:flex;align-items:center;gap:.5rem;font-size:.85rem;color:var(--muted);cursor:pointer;padding:.38rem 0;transition:.15s}
 .sub:hover{color:var(--txt)}
-.sub .sc{width:15px;height:15px;border-radius:5px;border:1.5px solid var(--faint);flex-shrink:0;display:grid;place-items:center;font-size:.6rem;color:transparent}
+.sub .sc{width:19px;height:19px;border-radius:5px;border:1.5px solid var(--faint);flex-shrink:0;display:grid;place-items:center;font-size:.6rem;color:transparent}
 .sub.sdone{color:var(--faint);text-decoration:line-through}
 .sub.sdone .sc{background:var(--ok);border-color:var(--ok);color:#06281c}
 .subs-toggle{font-size:.74rem;color:var(--faint);margin-top:.45rem;display:inline-flex;align-items:center;gap:.3rem}
@@ -271,13 +293,12 @@ section.view.active{display:block}
   <section class="view active" id="view-today">
     <div id="greetBox"></div>
     <div id="heroBox"></div>
-    <div class="strip" id="dayStrip"></div>
+    <div id="programBox"></div>
     <div id="agendaBox"></div>
     <div id="mailSugBox"></div>
-    <div class="section-title" id="nextTitle">Ensuite</div>
-    <div class="task-list" id="todayList"></div>
     <div class="done-strip" id="doneStrip"></div>
     <button class="btn ghost" id="btnEod" style="width:100%;margin-top:1rem;display:none" onclick="openEod()">🌙 Clôturer ma journée</button>
+    <button class="fab" onclick="openModal(null)" aria-label="Nouvelle tâche" title="Nouvelle tâche">＋</button>
   </section>
 
   <!-- ===== VUE TÂCHES ===== -->
@@ -328,7 +349,7 @@ section.view.active{display:block}
     <button data-view="today" class="active">☀️ Jour <span class="cnt" id="cntToday">0</span></button>
     <button data-view="cockpit">🗓 Semaine</button>
     <button data-view="tasks">📋 Tâches <span class="cnt" id="cntTasks">0</span></button>
-    <button data-view="stats">📊 Bilan</button>
+    <button data-view="stats">📊 Stats</button>
   </nav>
 </div>
 
@@ -375,8 +396,16 @@ section.view.active{display:block}
 <!-- ===== MODAL MENU / EXPORT ===== -->
 <div class="overlay" id="menuOverlay">
   <div class="modal">
-    <h2>Sauvegarde & réglages<button class="close-x" onclick="document.getElementById('menuOverlay').classList.remove('open')">✕</button></h2>
-    <div class="section-title" style="margin-top:0">☁️ Synchro PC ↔ mobile</div>
+    <h2>Réglages<button class="close-x" onclick="document.getElementById('menuOverlay').classList.remove('open')">✕</button></h2>
+    <div class="section-title" style="margin-top:0">🧭 Mon rythme de travail</div>
+    <p class="hint" style="margin-bottom:.5rem">Adapte l'app à ton contrat (43h, 31h, temps partiel…). C'est la base de calcul de tes journées « pleines » et de ce qui tient dans une journée.</p>
+    <div id="profileBox" style="margin-bottom:1rem"></div>
+    <div class="section-title">☕ Bien-être & performance</div>
+    <p class="hint" style="margin-bottom:.5rem">Rester concentré, c'est bien ; couper au bon moment, c'est mieux. L'app te suggère une micro-pause après une longue session de focus.</p>
+    <div id="wellbeingBox" style="margin-bottom:1rem"></div>
+    <details style="margin-bottom:1rem">
+    <summary class="section-title" style="cursor:pointer;list-style:none">🔌 Synchro & connexions (avancé)</summary>
+    <div class="section-title" style="font-size:.72rem">☁️ Synchro PC ↔ mobile</div>
     <div class="f-group"><label>Dépôt GitHub privé (propriétaire/nom)</label><input id="syncRepo" placeholder="mon-compte/mon-repo-prive"></div>
     <div class="f-group"><label>Token GitHub (fine-grained, permission « Contents » en écriture sur ce dépôt)</label><input id="syncToken" type="password" placeholder="github_pat_…"></div>
     <div style="display:flex;gap:.6rem;margin-bottom:.5rem">
@@ -385,17 +414,12 @@ section.view.active{display:block}
     </div>
     <p class="hint" id="syncStatus"></p>
     <p class="hint" style="margin-bottom:1rem">Une fois configurée sur chaque appareil, la synchro devient automatique : envoi ~8 s après chaque modification, récupération à l'ouverture de l'app. Les données vont uniquement dans ton dépôt privé.</p>
-    <div class="section-title">📅 Google Agenda</div>
+    <div class="section-title" style="font-size:.72rem">📅 Google Agenda</div>
     <div class="f-group" id="gcalIdGroup"><label>Client ID Google OAuth</label><input id="gcalClientId" placeholder="…apps.googleusercontent.com"></div>
     <button class="btn ghost" style="width:100%" onclick="gcalConnect(true)">📅 Connecter mon compte Google</button>
     <p class="hint" id="gcalStatus" style="margin:.5rem 0 .3rem">Affiche tes rendez-vous du jour dans le dashboard et calcule ton temps réellement disponible. Lecture seule, connexion directe navigateur → Google (aucun serveur tiers).</p>
     <p class="hint" id="mailStatus" style="margin:0 0 1rem"></p>
-    <div class="section-title">🧭 Mon rythme de travail</div>
-    <p class="hint" style="margin-bottom:.5rem">Adapte l'app à ton contrat (43h, 31h, temps partiel…). C'est la base de calcul de tes journées « pleines » et de ce qui tient dans une journée.</p>
-    <div id="profileBox" style="margin-bottom:1rem"></div>
-    <div class="section-title">☕ Bien-être & performance</div>
-    <p class="hint" style="margin-bottom:.5rem">Rester concentré, c'est bien ; couper au bon moment, c'est mieux. L'app te suggère une micro-pause après une longue session de focus.</p>
-    <div id="wellbeingBox" style="margin-bottom:1rem"></div>
+    </details>
     <div class="section-title">💾 Sauvegarde manuelle</div>
     <p class="hint" style="margin-bottom:1rem">Tes données restent sur cet appareil (aucun serveur). L'export JSON sert de sauvegarde ou de transfert manuel.</p>
     <div style="display:flex;flex-direction:column;gap:.6rem">
@@ -732,6 +756,8 @@ function toggleDone(id){
   if(!t.done){
     if(t.timerStart){stopTimer(t,true);const rem=runningTasks();if(rem.length===1)resegment(rem[0],1)}
     t.done=true;t.doneAt=Date.now();
+    if(navigator.vibrate)try{navigator.vibrate(15)}catch(e){}
+    if(!state.tasks.some(x=>!x.done&&(x.today||x.plan===todayStr())))maybeCelebrate();
     if(t.spent>0){
       const ratio=t.spent/(t.est*60000);
       const msg=ratio<=1.05?'👌 Fait en '+fmtMs(t.spent)+' (estimé '+fmtMin(t.est)+') — bien joué !':'✅ Fait en '+fmtMs(t.spent)+' (estimé '+fmtMin(t.est)+')';
@@ -903,41 +929,20 @@ function render(){
   if(state.days){let ch=false;const ts=todayStr();for(const k in state.days)if(k<ts){delete state.days[k];ch=true}if(ch)saveLocal()}
   const cap=todayCapacity();
 
-  /* --- héro : la tâche à attaquer maintenant (ou en cours, ou repos) --- */
+  /* --- héro uniquement quand un chrono tourne ou en mode repos ; sinon programme --- */
   const resting=isRest(todayStr());
   const running=state.tasks.find(t=>t.timerStart&&!t.done)||null;
-  const hero=running||today[0]||(open.slice().sort((a,b)=>score(b)-score(a))[0]||null);
-  if(resting&&!running)renderRestHero(today);
-  else renderHero(hero,!!running,cap);
-  const nwd=nextWorkDs();
-  document.getElementById('nextTitle').textContent=resting&&!running?(nwd?'Prêt pour '+new Date(nwd+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long'}):'À venir'):'Ensuite';
-
-  /* --- bandeau du jour --- */
-  const estTotal=today.reduce((s,t)=>s+t.est,0);
-  const spentToday=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0)+liveExtra();
-  const planCount=today.length+doneToday.length;
-  const pct=planCount?Math.round(doneToday.length/planCount*100):0;
-  const busy=busyRemaining();
-  const capOver=cap&&estTotal>cap;
-  document.getElementById('dayStrip').innerHTML=
-    `<span><b>${today.length}</b> à faire</span><span>·</span>
-     <span><b>${fmtMin(estTotal)||'0 min'}</b> estimé${cap?' / '+fmtMin(cap)+' dispo':''}</span><span>·</span>
-     <span>⏱ <b>${fmtMs(spentToday)}</b> focus</span>
-     ${busy>0?`<span>·</span><span>📅 <b>${fmtMs(busy)}</b> de RDV</span>`:''}
-     ${cap?`<span class="cap-chip" style="margin-left:auto">🕐 ${capLabelDs(todayStr(),cap)}${capOver?' · ⚠️ trop chargé':''}</span>`:`<span style="margin-left:auto"><b>${pct}%</b></span>`}
-     <div class="pbar"><i style="width:${pct}%"></i></div>`;
-
-  /* --- file « Ensuite » --- */
-  const rest=resting&&!running?today:today.filter(t=>!hero||t.id!==hero.id);
-  document.getElementById('nextTitle').style.display=rest.length?'flex':'none';
-  document.getElementById('todayList').innerHTML=rest.map(compactRow).join('');
-  document.getElementById('doneStrip').innerHTML=doneToday.length?`✅ ${doneToday.length} terminée${doneToday.length>1?'s':''} aujourd'hui — bien joué`:'';
+  if(running)renderHero(running,true,cap);
+  else if(resting)renderRestHero(today);
+  else document.getElementById('heroBox').innerHTML='';
+  renderProgram(today,doneToday,cap,running,resting);
+  document.getElementById('doneStrip').innerHTML='';
   document.getElementById('btnEod').style.display=(today.length+doneToday.length)?'block':'none';
 
   renderFilters();
   const filtered=currentFilter==='all'?open:open.filter(t=>t.projectId===currentFilter);
   renderList('backlogList',filtered.slice().sort(taskSort),false,true);
-  if(!filtered.length)document.getElementById('backlogList').innerHTML=`<div class="empty"><div class="e-ico">📭</div>Aucune tâche ici.</div>`;
+  if(!filtered.length)document.getElementById('backlogList').innerHTML=`<div class="empty"><div class="e-ico">📭</div>Aucune tâche ici.<br><button class="btn primary" style="margin-top:.9rem" onclick="openModal(null)">＋ Ajouter une tâche</button></div>`;
 
   const doneRecent=doneToday.slice().sort((a,b)=>b.doneAt-a.doneAt).slice(0,10);
   document.getElementById('doneTitle').style.display=doneRecent.length?'flex':'none';
@@ -956,6 +961,68 @@ function subsBlock(t){
   const d=t.subtasks.filter(s=>s.done).length;
   return `<span class="subs-toggle" onclick="toggleSubsOpen('${t.id}')">${t.subsOpen?'▾':'▸'} Étapes ${d}/${t.subtasks.length}</span>`+
     (t.subsOpen?`<div class="subs">${t.subtasks.map((s,i)=>`<div class="sub ${s.done?'sdone':''}" onclick="toggleSub('${t.id}',${i})"><span class="sc">✓</span>${esc(s.t)}</div>`).join('')}</div>`:'');
+}
+/* ===== Programme du jour : la carte unique qui répond à « je fais quoi aujourd'hui ? » ===== */
+function renderProgram(today,doneToday,cap,running,resting){
+  const el=document.getElementById('programBox');if(!el)return;
+  const estTotal=today.reduce((s,t)=>s+t.est,0);
+  const spentToday=state.log.filter(l=>l.date===todayStr()).reduce((s,l)=>s+l.ms,0)+liveExtra();
+  const planCount=today.length+doneToday.length;
+  const pct=planCount?Math.round(doneToday.length/planCount*100):0;
+  const busy=busyRemaining();
+  const budget=cap?Math.max(0,cap-dayReserve()):null;
+  const capOver=budget!==null&&estTotal>budget;
+  const nwd=resting?nextWorkDs():null;
+  const title=resting?(nwd?'Prêt pour '+new Date(nwd+'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long'}):'À venir'):'Programme du jour';
+  const hour=new Date().getHours();
+  const allDone=!today.length&&doneToday.length>0;
+  const eodInline=(allDone||hour>=(wellbeing.endHour||19)-1)&&planCount>0;
+
+  if(!today.length&&!doneToday.length){
+    el.innerHTML=`<div class="prog"><div class="prog-head"><span class="prog-title">📋 ${title}</span></div>
+      <div class="empty" style="padding:1.2rem .5rem"><div class="e-ico">🌤</div>Rien de prévu pour l'instant.
+      <div style="display:flex;gap:.6rem;margin-top:1rem;justify-content:center;flex-wrap:wrap">
+        <button class="btn primary" onclick="startVoice()">🎤 Dicter</button>
+        <button class="btn ghost" onclick="openModal(null)">＋ Tâche</button>
+        <button class="btn ghost" onclick="openDayPlan(todayStr())">🗓 Planifier</button>
+      </div></div></div>`;
+    return;
+  }
+
+  const rows=today.map((t,i)=>{
+    const p=proj(t.projectId);
+    const isRun=!!t.timerStart;
+    const current=!resting&&!running&&i===0;
+    if(current){
+      return `<div class="prog-now">
+        <div class="prog-now-top"><span class="pnum on">1</span><span class="prog-now-lbl">Maintenant</span>${badges(t).map(b=>`<span class="badge ${b[0]}">${b[1]}</span>`).join('')}</div>
+        <div class="prog-now-title">${esc(t.title)}</div>
+        <div class="t-meta" style="margin-top:.35rem"><span class="chip"><span class="pdot" style="background:${p.color}"></span>${esc(p.name)}</span><span class="chip">⏳ ${fmtMin(t.est)}</span></div>
+        ${subsBlock(t)}
+        <div class="h-actions" style="margin-top:.8rem"><button class="btn primary" onclick="toggleTimer('${t.id}')">▶ Lancer · ${fmtMin(t.est)}</button></div>
+        <div class="h-sub"><button onclick="toggleDone('${t.id}')">✓ Déjà fait</button><button onclick="toggleToday('${t.id}')">— Retirer du jour</button><button onclick="openEdit('${t.id}')">✎ Modifier</button></div>
+      </div>`;
+    }
+    return `<div class="prog-row ${isRun?'runrow':''}">
+      <span class="pnum">${i+1}</span><span class="pdot" style="background:${p.color}"></span>
+      <span class="rt" onclick="openEdit('${t.id}')">${esc(t.title)}</span>
+      ${isRun?`<span class="t-timer" data-tt="${t.id}">⏱</span>`:`<span class="re">${fmtMin(t.est)}</span>`}
+      <button class="t-btn ${isRun?'pause':'play'}" onclick="toggleTimer('${t.id}')" title="${isRun?'Pause':'Démarrer'}">${isRun?'❚❚':'▶'}</button>
+    </div>`;
+  }).join('');
+
+  el.innerHTML=`<div class="prog">
+    <div class="prog-head">
+      <span class="prog-title">📋 ${title}</span>
+      <span class="prog-sum">${today.length} tâche${today.length>1?'s':''} · ~${fmtMin(estTotal)||'0 min'}${busy>0?' · 📅 '+fmtMs(busy):''}</span>
+    </div>
+    ${cap?`<div class="prog-cap">${capLabelDs(todayStr(),cap)==='légère'?'🔋 Journée légère':'🕐 Journée partielle'} · ~${fmtMin(budget)} pour tes tâches${capOver?' · <b>⚠️ trop chargé</b>':''}</div>`:''}
+    ${allDone?`<div class="empty" style="padding:.8rem .5rem">🎉 Tout est fait pour aujourd'hui — bien joué !</div>`:rows}
+    <div class="prog-foot"><div class="pbar"><i style="width:${pct}%"></i></div>
+      <span class="prog-foot-txt">✅ ${doneToday.length} faite${doneToday.length>1?'s':''} · ⏱ ${fmtMs(spentToday)} focus · ${pct}%</span>
+      ${eodInline?`<button class="btn ghost" style="width:100%;margin-top:.6rem;font-size:.85rem;padding:.55rem" onclick="openEod()">🌙 Clôturer ma journée</button>`:''}
+    </div>
+  </div>`;
 }
 function nextWorkDs(){
   for(let i=1;i<=21;i++){const d=new Date();d.setDate(d.getDate()+i);const ds=localDS(d);if(!isRest(ds))return ds;}
@@ -1047,8 +1114,8 @@ function renderList(elId,tasks,isToday,withArrows){
         </div>
         <div class="t-actions">
           ${!t.done?`<button class="t-btn ${running?'pause':'play'}" onclick="toggleTimer('${t.id}')" title="${running?'Pause':'Démarrer'}">${running?'❚❚':'▶'}</button>`:''}
-          ${!t.done&&!isToday?`<button class="t-btn" onclick="toggleToday('${t.id}')" title="${t.today?'Retirer de ma journée':'Ajouter à ma journée'}">${t.today?'☀️':'🌤'}</button>`:''}
-          ${!t.done&&isToday?`<button class="t-btn" onclick="toggleToday('${t.id}')" title="Reporter">↩︎</button>`:''}
+          ${!t.done&&!isToday?`<button class="t-btn" onclick="toggleToday('${t.id}')" title="${t.today?'Retirer du jour':'Ajouter à ma journée'}">${t.today?'☀️':'＋☀️'}</button>`:''}
+          ${!t.done&&isToday?`<button class="t-btn" onclick="toggleToday('${t.id}')" title="Retirer du jour">—</button>`:''}
           <button class="t-btn" onclick="openEdit('${t.id}')" title="Modifier">✎</button>
         </div>
       </div>
@@ -1073,6 +1140,7 @@ function renderBalance(){
   else if(worked===0)verdict='Semaine tranquille pour l\'instant. L\'équilibre, c\'est aussi savoir doser sans culpabiliser. 🌿';
   else verdict='👌 Rythme sain : tu avances sans te cramer. Continue à protéger tes temps de repos, c\'est ton meilleur carburant.';
   box.innerHTML=`
+    ${!profile?`<p class="hint" style="margin-bottom:.6rem">⚠️ Contrat non réglé (30h par défaut). <a href="#" style="color:var(--accent2)" onclick="document.getElementById('btnMenu').click();return false">Régler mes heures →</a></p>`:''}
     <div class="proj-bar" style="margin-bottom:.7rem"><div class="pl"><b>Temps de travail</b><span>${fmtMin(Math.round(worked))} / ${fmtMin(contract)} contrat</span></div>
       <div class="pb"><i style="width:${Math.min(100,pctW)}%;background:${barCol}"></i></div></div>
     <div class="greet-meta" style="margin-bottom:.7rem">
@@ -1201,10 +1269,19 @@ function renderDurs(){
 }
 function addSubField(v){fSubs.push({t:v,done:false});renderSubFields();
   const inputs=document.querySelectorAll('#fSubs input');if(inputs.length)inputs[inputs.length-1].focus()}
+function subsSumMin(){return fSubs.reduce((s,x)=>s+(+x.min>0?+x.min:0),0)}
+function updateEstFromSubs(){
+  const sum=subsSumMin();
+  const note=document.getElementById('estFromSubs');
+  if(sum>0){fDurVal=sum;renderDurs();if(note)note.textContent='⏱ Durée calculée depuis les étapes : '+fmtMin(sum)}
+  else if(note)note.textContent='';
+}
 function renderSubFields(){
   document.getElementById('fSubs').innerHTML=fSubs.map((s,i)=>`<div class="sub-edit">
-    <input value="${esc(s.t)}" placeholder="Étape…" oninput="fSubs[${i}].t=this.value">
-    <button class="rm t-btn" onclick="fSubs.splice(${i},1);renderSubFields()">✕</button></div>`).join('');
+    <input value="${esc(s.t)}" placeholder="Étape…" oninput="fSubs[${i}].t=this.value" style="flex:1 1 55%">
+    <input type="number" min="0" max="600" value="${+s.min>0?+s.min:''}" placeholder="min" title="Durée de l'étape (optionnel)" oninput="fSubs[${i}].min=+this.value||0;updateEstFromSubs()" style="width:4.6rem;flex:0 0 auto">
+    <button class="rm t-btn" onclick="fSubs.splice(${i},1);renderSubFields();updateEstFromSubs()">✕</button></div>`).join('')
+    +'<p class="hint" id="estFromSubs" style="margin:.2rem 0 .4rem">'+(subsSumMin()>0?'⏱ Durée calculée depuis les étapes : '+fmtMin(subsSumMin()):'')+'</p>';
 }
 
 document.getElementById('fTemplate').addEventListener('change',e=>{
@@ -1231,17 +1308,21 @@ document.getElementById('fProject').addEventListener('change',e=>{
 document.getElementById('btnSave').addEventListener('click',()=>{
   const title=document.getElementById('fTitle').value.trim();
   if(!title){toast('⚠️ Il faut un titre !');return}
+  const subs=fSubs.filter(s=>s.t.trim());
+  const sum=subs.reduce((s,x)=>s+(+x.min>0?+x.min:0),0);
   const data={
     title,notes:document.getElementById('fNotes').value.trim(),
     projectId:document.getElementById('fProject').value,
     deadline:document.getElementById('fDeadline').value||null,
-    est:fDurVal,impact:segVal('fImpact'),urgency:segVal('fUrgency'),complexity:segVal('fComplexity'),
-    subtasks:fSubs.filter(s=>s.t.trim())
+    est:sum>0?sum:fDurVal,impact:segVal('fImpact'),urgency:segVal('fUrgency'),complexity:segVal('fComplexity'),
+    subtasks:subs
   };
   if(editingId){Object.assign(state.tasks.find(t=>t.id===editingId),data)}
   else{state.tasks.push(Object.assign({id:uid(),today:false,done:false,doneAt:null,spent:0,timerStart:null,createdAt:Date.now(),subsOpen:false},data));
     document.getElementById('quickInput').value='';toast('✅ Tâche créée')}
   save();closeModal();render();
+  /* nudge : grosse mission sans étapes → suggérer un découpage */
+  if(!data.subtasks.length&&data.est>=90)setTimeout(()=>toast('💡 Grosse mission (≥1h30) : découpe-la en étapes (✎) — estimation plus juste et avancement visible'),1200);
 });
 document.getElementById('btnDelete').addEventListener('click',()=>{
   if(confirm('Supprimer cette tâche ?')){
@@ -1253,10 +1334,8 @@ document.getElementById('btnDelete').addEventListener('click',()=>{
 /* ================= QUICK ADD ================= */
 document.getElementById('quickInput').addEventListener('keydown',e=>{
   if(e.key==='Enter'&&e.target.value.trim()){
-    state.tasks.push({id:uid(),title:e.target.value.trim(),notes:'',projectId:state.projects[0].id,
-      est:30,impact:2,urgency:2,complexity:1,deadline:null,today:false,done:false,doneAt:null,
-      spent:0,timerStart:null,subtasks:[],createdAt:Date.now(),subsOpen:false});
-    e.target.value='';save();render();toast('✅ Ajoutée — pense à régler durée & priorité avec ✎');
+    voiceAdd(e.target.value.trim(),'text');
+    e.target.value='';
   }
 });
 document.getElementById('btnFullAdd').addEventListener('click',()=>openModal(null));
@@ -1333,14 +1412,33 @@ function capSegHTML(full,sel,fn){
   return [[full,'💪 Pleine'],[half,'🕐 Partielle'],[q,'🔋 Légère'],[0,'🌙 Repos']]
     .map(([v,l])=>`<button class="${v===sel?'on':''}" onclick="${fn}(${v})">${l}<br><small>${v?fmtMin(v):'—'}</small></button>`).join('');
 }
+function setWeeklyHours(v){
+  const h=parseFloat((v||'').toString().replace(',','.'));
+  if(isNaN(h)||h<=0||h>80){toast('⚠️ Entre un nombre d\'heures valide (ex : 43)');return}
+  ensureProfile();
+  /* répartit sur les jours travaillés actuels (ou lun-ven si aucun) */
+  let workDays=profile.days.map((m,i)=>m>0?i:-1).filter(i=>i>=0);
+  if(!workDays.length)workDays=[1,2,3,4,5];
+  const per=round15(h*60/workDays.length);
+  profile.days=profile.days.map((m,i)=>workDays.includes(i)?per:0);
+  saveProfile();renderProfile();render();
+  toast('🧭 Contrat réglé : '+h+'h/semaine → '+fmtMin(per)+' par jour travaillé');
+}
 function renderProfile(){
   const el=document.getElementById('profileBox');if(!el)return;
   const p=profile||{days:[0,360,360,360,360,360,0],reserve:0};
   const dn=['D','L','M','M','J','V','S'];
   const weekly=p.days.reduce((s,m)=>s+m,0);
   el.innerHTML=`<div class="f-group"><label>Mon prénom (pour l'accueil)</label><input value="${esc(p.name||'')}" placeholder="Ton prénom" oninput="ensureProfile();profile.name=this.value.slice(0,20);saveProfile()"></div>
-    <p class="hint" style="margin-bottom:.5rem">Total : <b>${fmtMin(weekly)}</b>/semaine. Touche un jour pour régler ses heures.</p>
-    <div class="dur-chips" style="margin-bottom:.6rem">${p.days.map((m,i)=>`<button class="${m>0?'on':''}" onclick="editDayHours(${i})">${dn[i]}<br><small style="font-size:.62rem">${m?fmtMin(m):'—'}</small></button>`).join('')}</div>
+    <div class="f-group"><label>Mon contrat (heures / semaine)</label>
+      <div style="display:flex;gap:.5rem">
+        <input type="number" step="0.5" min="1" max="80" value="${(weekly/60).toFixed(1).replace('.0','')}" id="weeklyHoursInput" placeholder="ex : 43" style="flex:1">
+        <button class="btn primary" style="padding:.55rem 1rem" onclick="setWeeklyHours(document.getElementById('weeklyHoursInput').value)">OK</button>
+      </div>
+      <p class="hint" style="margin-top:.3rem">Réparti automatiquement sur tes jours travaillés — puis affine jour par jour ci-dessous si besoin.</p>
+    </div>
+    <p class="hint" style="margin-bottom:.5rem">Total actuel : <b>${fmtMin(weekly)}</b>/semaine. Touche un jour pour régler ses heures.</p>
+    <div class="dur-chips" style="margin-bottom:.6rem">${p.days.map((m,i)=>`<button class="${m>0?'on':''}" onclick="editDayHours(${i})">${dn[i]}<br><small style="font-size:.72rem">${m?fmtMin(m):'—'}</small></button>`).join('')}</div>
     <div class="f-group" style="margin-bottom:0"><label>Réserve « divers » par jour (mails, lecture, imprévus…)</label>
       <select onchange="setReserve(this.value)" style="width:auto">
         ${[0,30,45,60,90,120].map(v=>`<option value="${v}"${(+p.reserve||0)===v?' selected':''}>${v?fmtMin(v):'aucune'}</option>`).join('')}
@@ -1734,17 +1832,13 @@ function renderGreeting(){
   const doneWeek=state.tasks.filter(t=>t.done).concat(state.archive||[]).filter(t=>(t.doneAt||0)>=mondayOf(Date.now()).getTime()).length;
   const open=state.tasks.filter(t=>!t.done);
   const todayN=open.filter(t=>t.today||t.plan===todayStr()).length;
-  el.innerHTML=`<div class="greet">
-    <div class="greet-hi">${hi}${name} ${emo}</div>
-    <div class="greet-msg" ${ow>0?'style="color:#86efac"':''}>${msg}</div>
-    <div class="greet-meta">
-      ${streak>=2?`<span class="greet-pill ${ow>0?'':'fire'}">🔥 ${streak} jours d'affilée</span>`:''}
-      ${ow>0?`<span class="greet-pill" style="border-color:rgba(52,211,153,.4);color:#86efac">💚 pense à souffler</span>`:''}
-      ${doneWeek>0?`<span class="greet-pill">✅ ${doneWeek} cette semaine</span>`:''}
-      ${todayN>0?`<span class="greet-pill">🎯 ${todayN} au programme</span>`:''}
+  el.innerHTML=`<div class="greet" style="margin-bottom:.6rem">
+    <div class="greet-hi" style="display:flex;align-items:center;gap:.55rem;flex-wrap:wrap">${hi}${name} ${emo}
+      ${streak>=2?`<span class="greet-pill ${ow>0?'':'fire'}" style="font-size:.7rem">🔥 ${streak} j</span>`:''}
+      ${ow>0?`<span class="greet-pill" style="font-size:.7rem;border-color:rgba(52,211,153,.4);color:#86efac">💚 souffle</span>`:''}
     </div>
+    <div class="greet-msg" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${ow>0?'color:#86efac':''}">${msg}</div>
   </div>`;
-  maybeCelebrate();
 }
 function maybeCelebrate(){
   try{
@@ -1937,6 +2031,34 @@ function mailToTask(){
 /* ================= VOIX ================= */
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 function normTxt(s){return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'')}
+/* Nettoie une dictée brute en un titre de tâche propre :
+   retire les mots de remplissage, les tournures « il faut que je… », et
+   convertit le verbe 1re personne en infinitif quand c'est possible. */
+const INF_MAP={envoie:'envoyer',mette:'mettre',mets:'mettre',fasse:'faire',fais:'faire',aille:'aller',vais:'aller',prenne:'prendre',prends:'prendre',voie:'voir',vois:'voir',appelle:'appeler',rappelle:'rappeler',achete:'acheter',paie:'payer',essaie:'essayer',finisse:'finir',finis:'finir',reponde:'répondre',reponds:'répondre',ecrive:'écrire',ecris:'écrire',relance:'relancer',verifie:'vérifier',recupere:'récupérer'};
+function toInfinitive(w){
+  const n=normTxt(w);
+  if(INF_MAP[n])return INF_MAP[n];
+  if(/e$/.test(w)&&!/re$/.test(w))return w+'r';       /* finalise → finaliser */
+  if(/is$/.test(w))return w.slice(0,-1)+'r';          /* choisis → choisir */
+  return w;
+}
+function cleanDictation(s){
+  let t=' '+s+' ';
+  /* mots de remplissage (lookahead au lieu de \b : les accents cassent \b en JS) */
+  t=t.replace(/(^|\s)(euh+|bah|ben|du coup|en fait|voil[aà]|donc|alors|bref|tu vois|quoi)(?=\s|$|[.,;!?])/gi,'$1');
+  /* « j'ai X à faire / à mettre à jour » → « faire X / mettre à jour X » */
+  t=t.replace(/\bj'?ai\s+(.+?)\s+[aà]\s+(mettre\s+[aà]\s+jour|faire|r[ée]aliser|finaliser|terminer|cr[ée]er|envoyer|corriger|modifier|v[ée]rifier|pr[ée]parer|traiter|g[ée]rer|relancer)(?=\s|$|[.,;!?])/gi,'$2 $1');
+  /* tournures d'intro : « il faut que je finalise » → « finalise » (puis infinitif) */
+  const m=t.match(/^\s*(il\s+(me\s+)?fau(t|drait)\s+(que\s+j[e']\s*|absolument\s+que\s+j[e']\s*)?|je\s+(dois|vais|veux)\s+|penser?\s+[aà]\s+|pense\s+[aà]\s+|ajoute[rz]?\s+(une\s+)?t[aâ]che\s*:?\s*|ne\s+pas\s+oublier\s+de\s+|j[e']\s*)/i);
+  if(m){
+    t=t.slice(m.index+m[0].length);
+    const w=t.trim().split(/\s+/);
+    if(w.length&&/^[a-zà-ÿ]+$/i.test(w[0]))w[0]=toInfinitive(w[0]);
+    t=w.join(' ');
+  }
+  t=t.replace(/^\s*(ai|a)\s+/i,'');/* résidu de « j'ai » non reconnu */
+  return cap1(t.replace(/\s+/g,' ').trim().replace(/^[,;:.\s]+|[,;:.\s]+$/g,''));
+}
 /* détecte une échéance jj/mm dans un texte normalisé, en évitant les faux positifs
    (« ouvert 24/7 », « 1/2 ») : exige une année OU un mot de contexte proche */
 function detectDeadline(nn){
@@ -1966,7 +2088,7 @@ function startVoice(){
   rec.onend=()=>{recActive=null;document.querySelectorAll('.mic-btn').forEach(b=>b.classList.remove('listening'))};
   rec.start();
 }
-function voiceAdd(raw){
+function voiceAdd(raw,src){
   let txt=' '+raw.trim()+' ', n=normTxt(txt);
   const strip=re=>{const m=n.match(re);if(m){const i=n.indexOf(m[0]);txt=txt.slice(0,i)+' '+txt.slice(i+m[0].length);n=normTxt(txt)}return m};
   /* durée */
@@ -1999,13 +2121,12 @@ function voiceAdd(raw){
     if(n.includes(pn)){projectId=p.id;
       strip(new RegExp('(?:pour (?:le |la )?|projet |chez )?'+pn.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')));break}}
   strip(/^\s*(?:ajoute[rz]?|cree[rz]?|creer|nouvelle?)\s+(?:une\s+)?tache\s*(?::|,)?/);
-  /* titre = ce qui reste */
-  let title=txt.replace(/\s+/g,' ').replace(/\s*[,;:.]\s*(?=[,;:.]|$)/g,'').trim().replace(/^[,;:.\s]+|[,;:.\s]+$/g,'');
+  /* titre = ce qui reste, nettoyé et reformulé */
+  let title=cleanDictation(txt.replace(/\s*[,;:.]\s*(?=[,;:.]|$)/g,''));
   if(!title){toast('⚠️ Je n\'ai pas capté le titre de la tâche — réessaie');return}
-  title=title[0].toUpperCase()+title.slice(1);
-  state.tasks.push({id:uid(),title,notes:'🎤 Dictée : « '+raw.trim()+' »',projectId,est,impact,urgency,complexity,deadline,today,done:false,doneAt:null,spent:0,timerStart:null,subtasks:[],createdAt:Date.now(),subsOpen:false});
+  state.tasks.push({id:uid(),title,notes:src==='text'?'':'🎤 Dictée : « '+raw.trim()+' »',projectId,est,impact,urgency,complexity,deadline,today,done:false,doneAt:null,spent:0,timerStart:null,subtasks:[],createdAt:Date.now(),subsOpen:false});
   save();render();
-  toast('🎤 <b>'+esc(title)+'</b><br>'+fmtMin(est)+' · '+esc(proj(projectId).name)
+  toast((src==='text'?'✅ ':'🎤 ')+'<b>'+esc(title)+'</b><br>'+fmtMin(est)+' · '+esc(proj(projectId).name)
     +(urgency===3?' · 🔥 urgent':'')+(impact===3?' · 💰':'')
     +(deadline?' · ⏰ '+new Date(deadline).toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'}):'')
     +(today?' · ☀️':'')+'<br><span style="color:var(--muted);font-size:.78rem">Ajuste avec ✎ si besoin</span>');
