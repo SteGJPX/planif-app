@@ -36,7 +36,7 @@ select option{background:var(--bg2);color:var(--txt)}
 ::placeholder{color:var(--faint)}
 
 /* ---------- Layout ---------- */
-.app{max-width:760px;margin:0 auto;padding:1.2rem 1rem calc(6.5rem + var(--safe-b))}
+.app{max-width:760px;margin:0 auto;padding:1.2rem 1rem calc(9rem + var(--safe-b))}
 header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;margin-bottom:1.4rem;animation:fadeUp .5s ease both}
 .brand{font-size:.8rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:.45rem}
 .brand .dot{width:9px;height:9px;border-radius:50%;background:var(--grad);box-shadow:0 0 12px rgba(124,108,255,.8)}
@@ -46,13 +46,15 @@ h1.date{font-size:clamp(1.5rem,5vw,2.1rem);font-weight:800;letter-spacing:-.02em
 .icon-btn:hover{background:var(--card-h);border-color:var(--border-h);transform:translateY(-1px)}
 
 /* ---------- Nav ---------- */
-nav.tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(.9rem + var(--safe-b));z-index:50;
-  display:flex;gap:.25rem;padding:.35rem;border-radius:999px;
-  background:rgba(16,21,39,.85);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
-  border:1px solid var(--border);box-shadow:var(--shadow)}
-nav.tabs button{padding:.75rem 1.05rem;border-radius:999px;font-size:.9rem;font-weight:600;color:var(--muted);transition:.25s;display:flex;align-items:center;gap:.4rem;white-space:nowrap}
-nav.tabs button.active{background:var(--grad);color:#fff;box-shadow:0 4px 18px rgba(124,108,255,.45)}
-nav.tabs button .cnt{font-size:.72rem;background:rgba(255,255,255,.18);border-radius:999px;padding:0 .45rem;min-width:1.3rem;text-align:center}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:50;
+  display:flex;justify-content:center;gap:0;padding:.3rem .5rem calc(.45rem + var(--safe-b));
+  background:rgba(13,17,32,.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1px solid var(--border)}
+nav.tabs button{flex:1;max-width:7.5rem;display:flex;flex-direction:column;align-items:center;gap:2px;padding:.35rem .2rem;border-radius:12px;font-size:.7rem;font-weight:600;color:var(--muted);transition:.2s;position:relative}
+nav.tabs button .ico{font-size:1.35rem;line-height:1.15;transition:transform .2s}
+nav.tabs button.active{color:#fff;background:rgba(124,108,255,.16)}
+nav.tabs button.active .ico{transform:scale(1.12)}
+nav.tabs button .cnt{position:absolute;top:-1px;left:50%;transform:translateX(.55rem);background:var(--accent);color:#fff;font-size:.62rem;font-weight:700;border-radius:999px;padding:0 .32rem;min-width:1.05rem;text-align:center;line-height:1.5}
 
 /* ---------- Sections ---------- */
 section.view{display:none;animation:fadeUp .4s ease both}
@@ -124,7 +126,7 @@ section.view.active{display:block}
 .prog-foot{margin-top:.7rem}
 .prog-foot .pbar{height:5px;margin-bottom:.35rem}
 .prog-foot-txt{font-size:.74rem;color:var(--muted)}
-.fab{position:fixed;right:1rem;bottom:calc(4.9rem + var(--safe-b));width:54px;height:54px;border-radius:50%;background:var(--grad);color:#fff;font-size:1.7rem;font-weight:600;box-shadow:0 6px 22px rgba(124,108,255,.5);z-index:49;display:grid;place-items:center;transition:.2s}
+.fab{position:fixed;right:max(1rem,calc(50% - 380px + 1rem));bottom:calc(4.5rem + var(--safe-b));width:54px;height:54px;border-radius:50%;background:var(--grad);color:#fff;font-size:1.7rem;font-weight:600;box-shadow:0 6px 22px rgba(124,108,255,.5);z-index:49;display:grid;place-items:center;transition:.2s;border:2px solid rgba(255,255,255,.15)}
 .fab:hover{transform:scale(1.07)}
 /* ---------- Vue Semaine ---------- */
 .ck-day{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:.7rem .85rem;margin-bottom:.5rem;animation:fadeUp .35s ease both;cursor:pointer;transition:border-color .2s,background .2s}
@@ -254,7 +256,7 @@ section.view.active{display:block}
 .modal-actions .btn{flex:1}
 
 /* ---------- Toast ---------- */
-#toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(5.5rem + var(--safe-b));background:var(--bg2);border:1px solid var(--border-h);border-radius:14px;padding:.7rem 1.1rem;font-size:.88rem;z-index:200;opacity:0;pointer-events:none;transition:.35s cubic-bezier(.22,1,.36,1);box-shadow:var(--shadow);max-width:90vw;text-align:center}
+#toast{position:fixed;left:50%;transform:translateX(-50%) translateY(20px);bottom:calc(5rem + var(--safe-b));background:var(--bg2);border:1px solid var(--border-h);border-radius:14px;padding:.7rem 1.1rem;font-size:.88rem;z-index:200;opacity:0;pointer-events:none;transition:.35s cubic-bezier(.22,1,.36,1);box-shadow:var(--shadow);max-width:90vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 .empty{text-align:center;padding:2.5rem 1rem;color:var(--muted)}
@@ -297,8 +299,6 @@ section.view.active{display:block}
     <div id="agendaBox"></div>
     <div id="mailSugBox"></div>
     <div class="done-strip" id="doneStrip"></div>
-    <button class="btn ghost" id="btnEod" style="width:100%;margin-top:1rem;display:none" onclick="openEod()">🌙 Clôturer ma journée</button>
-    <button class="fab" onclick="openModal(null)" aria-label="Nouvelle tâche" title="Nouvelle tâche">＋</button>
   </section>
 
   <!-- ===== VUE TÂCHES ===== -->
@@ -346,12 +346,15 @@ section.view.active{display:block}
   </section>
 
   <nav class="tabs">
-    <button data-view="today" class="active">☀️ Jour <span class="cnt" id="cntToday">0</span></button>
-    <button data-view="cockpit">🗓 Semaine</button>
-    <button data-view="tasks">📋 Tâches <span class="cnt" id="cntTasks">0</span></button>
-    <button data-view="stats">📊 Stats</button>
+    <button data-view="today" class="active"><span class="ico">☀️</span><span>Jour</span><span class="cnt" id="cntToday">0</span></button>
+    <button data-view="cockpit"><span class="ico">🗓</span><span>Semaine</span></button>
+    <button data-view="tasks"><span class="ico">📋</span><span>Tâches</span><span class="cnt" id="cntTasks">0</span></button>
+    <button data-view="stats"><span class="ico">📊</span><span>Stats</span></button>
   </nav>
 </div>
+
+<!-- Bouton d'ajout flottant : hors des sections animées (référentiel fixe fiable) -->
+<button class="fab" onclick="openModal(null)" aria-label="Nouvelle tâche" title="Nouvelle tâche">＋</button>
 
 <!-- ===== MODAL TÂCHE ===== -->
 <div class="overlay" id="taskOverlay">
@@ -735,7 +738,8 @@ function tick(){
     const mins=(Date.now()-focusStart)/60000;
     if(mins>=wellbeing.interval&&Date.now()-lastNudge>=wellbeing.interval*60000){
       lastNudge=Date.now();
-      toast('☕ '+Math.round(mins)+' min de focus d\'affilée — accorde-toi 2-3 min de pause, tu repartiras plus net et plus motivé 💪');
+      const BM=['☕ '+Math.round(mins)+' min de focus — accorde-toi 2-3 min de pause, tu repartiras plus net 💪','👀 '+Math.round(mins)+' min d\'écran — règle 20-20-20 : regarde à 20 m pendant 20 s, tes yeux te diront merci','🚶 '+Math.round(mins)+' min assis — lève-toi, étire-toi, bois un verre d\'eau. 2 min et ça repart','🧘 '+Math.round(mins)+' min de focus — respire un grand coup, détends les épaules, et on repart'];
+      toast(BM[Math.floor(Date.now()/3600000)%BM.length]);
     }
   }
   run.forEach(t=>{
@@ -937,7 +941,6 @@ function render(){
   else document.getElementById('heroBox').innerHTML='';
   renderProgram(today,doneToday,cap,running,resting);
   document.getElementById('doneStrip').innerHTML='';
-  document.getElementById('btnEod').style.display=(today.length+doneToday.length)?'block':'none';
 
   renderFilters();
   const filtered=currentFilter==='all'?open:open.filter(t=>t.projectId===currentFilter);
