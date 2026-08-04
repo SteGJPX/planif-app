@@ -728,8 +728,24 @@ function logTime(projectId,ms){
   const e=state.log.find(l=>l.date===d&&l.projectId===projectId);
   if(e)e.ms+=ms; else state.log.push({date:d,projectId,ms});
 }
+/* garde-fou « chrono oublié » : un segment qui dépasse 5h est mis en pause
+   automatiquement et plafonné à 4h pour ne pas polluer les stats */
+function checkForgotten(){
+  let changed=false;
+  runningTasks().forEach(t=>{
+    const seg=Date.now()-t.timerStart;
+    if(seg>5*3600000){
+      const credit=Math.min(seg,4*3600000)*(t.timerRate||1);
+      t.spent+=credit;logTime(t.projectId,credit);
+      t.timerStart=null;t.timerRate=1;changed=true;
+      toast('😴 Chrono oublié sur « '+esc(t.title.slice(0,40))+'… » — mis en pause, '+fmtMs(credit)+' comptées (plafonné à 4h). Ajuste via ✎ si besoin.');
+    }
+  });
+  if(changed){save();render()}
+}
 let focusStart=null,lastNudge=0;
 function tick(){
+  checkForgotten();
   const run=runningTasks();
   if(!run.length){document.title='Planif — Mon assistant de journée';focusStart=null;lastNudge=0;return}
   /* bien-être : suggérer une pause après une longue session de focus continu */
